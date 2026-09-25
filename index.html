@@ -4545,6 +4545,1145 @@ document.head.appendChild(css);
 decor();
 if(!S)renderDeckSelect();
 })();
+
+/* ===== ARCANUM v23: SỬA VOUCHER/TRÙNG JOKER + CHỈNH ĐỘ HIẾM + DÙNG TAROT/PLANET TRONG SHOP + PITY REROLL ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+
+/* ---------- 1. TỈ LỆ ĐỘ HIẾM MỚI TRONG SHOP (chỉnh ở đây) ---------- */
+// C = Thường, U = Hiếm, R = Rất hiếm. Huyền thoại (L) không bao giờ bán trong Shop.
+const RARITY_WEIGHT={C:0.76,U:0.215,R:0.025}; // R giảm mạnh còn 2.5% (trước ~6%)
+
+/* ---------- 2. HỆ THỐNG "PITY REROLL": lá đã ra thì giảm tỉ lệ, lá chưa ra thì tăng dần ---------- */
+const SEEN_DECAY=1.6; // số càng lớn, lá đã xuất hiện càng nhanh chóng bị giảm tỉ lệ (không về 0)
+
+function tierCounts(){
+  const c={C:0,U:0,R:0};
+  Object.values(JOKERS).forEach(d=>{if(c[d.rarity]!==undefined)c[d.rarity]++;});
+  return c;
+}
+function pickShopKey(exclude){
+  const counts=tierCounts();
+  const seenMap=S.shopSeenCount||{};
+  const candidates=Object.keys(JOKERS).filter(k=>JOKERS[k].rarity!=='L'&&!exclude.has(k));
+  if(!candidates.length)return null;
+  const weights=candidates.map(k=>{
+    const rar=JOKERS[k].rarity;
+    const base=(RARITY_WEIGHT[rar]||0.01)/(counts[rar]||1);
+    const seenN=seenMap[k]||0;
+    return base/(1+seenN*SEEN_DECAY);
+  });
+  const total=weights.reduce((a,b)=>a+b,0)||1;
+  let r=Math.random()*total;
+  for(let i=0;i<candidates.length;i++){r-=weights[i];if(r<=0)return candidates[i];}
+  return candidates[candidates.length-1];
+}
+function applyJokerPicks(){
+  if(!S||!S.shopOffers||!S.shopOffers.jokers)return;
+  S.shopSeenCount=S.shopSeenCount||{};
+  const chosen=new Set();
+  // Giữ nguyên các ô đã được chọn theo "lối chơi" (syn) từ trước, chỉ random lại phần còn lại
+  S.shopOffers.jokers.forEach(o=>{
+    if(!o)return;
+    if(o.syn){chosen.add(o.key);S.shopSeenCount[o.key]=(S.shopSeenCount[o.key]||0)+1;}
+  });
+  S.shopOffers.jokers.forEach(o=>{
+    if(!o||o.syn)return;
+    const k=pickShopKey(chosen);
+    if(!k)return;
+    o.key=k;chosen.add(k);
+    S.shopSeenCount[k]=(S.shopSeenCount[k]||0)+1;
+  });
+}
+
+/* ---------- 3. GẮN VÀO buildShop / rerollShop (chạy SAU CÙNG để không bị hệ thống khác ghi đè) ---------- */
+const _bsV23=buildShop;
+buildShop=function(){
+  _bsV23();
+  S.shopSeenCount={}; // mỗi lần vào Shop mới (Blind mới) thì làm mới bộ đếm
+  applyJokerPicks();
+};
+const _rrV23=rerollShop;
+rerollShop=function(){
+  const savedVoucher=S.shopOffers?S.shopOffers.voucher:null;
+  const savedBought=S.shopOffers?S.shopOffers.voucherBought:false;
+  _rrV23();
+  // FIX: Voucher không còn bị mất khi Reroll — nếu Voucher biến mất sau reroll thì khôi phục lại
+  if(S.shopOffers&&!S.shopOffers.voucher&&savedVoucher){
+    S.shopOffers.voucher=savedVoucher;
+    S.shopOffers.voucherBought=savedBought;
+  }
+  applyJokerPicks(); // Reroll cũng áp dụng pity: lá vừa thấy khó ra lại, lá mới dễ ra hơn
+  render();
+};
+
+/* ---------- 4. DÙNG TAROT / PLANET NGAY TRONG SHOP (vd: Hermit nhân đôi tiền để roll tiếp) ---------- */
+window.shopUseConsumable=function(u){beginUseConsumable(u);};
+function isShopUsable(c){
+  if(!c)return false;
+  if(c.type==='planet')return true;
+  const def=TAROTS[c.key];
+  return !!(def&&def.max===0); // chỉ các Tarot KHÔNG cần chọn lá (Hermit, Emperor, Priestess, Temperance, Judgement, Wheel, Spirit, Fool...)
+}
+const _rV23=render;
+render=function(){
+  _rV23();
+  try{
+    // Gắn nút "Dùng" cho Tarot/Planet trong khu "ĐANG SỞ HỮU" của Shop
+    if(S&&S.phase==='shop'){
+      const rows=document.querySelectorAll('.shop-owned');
+      const consRow=rows[1];
+      if(consRow){
+        [...consRow.querySelectorAll('.own-chip')].forEach((chip,i)=>{
+          const c=S.consumables[i];
+          if(c&&isShopUsable(c)&&!chip.querySelector('.use-btn')){
+            const btn=document.createElement('button');
+            btn.className='use-btn';btn.textContent='Dùng';
+            btn.onclick=()=>shopUseConsumable(c.uid);
+            const sellBtn=chip.querySelector('button');
+            if(sellBtn)chip.insertBefore(btn,sellBtn);else chip.appendChild(btn);
+          }
+        });
+      }
+    }
+    // FIX: bỏ số thứ tự nhỏ trên Joker (gây lag khi vẽ lại liên tục)
+    document.querySelectorAll('.ord, .ord-hint').forEach(el=>el.remove());
+    document.querySelectorAll('.own-chip > b').forEach(b=>{if(/^\d+$/.test((b.textContent||'').trim()))b.remove();});
+  }catch(e){console.error(e);}
+};
+
+/* ---------- 5. CSS cho nút "Dùng" trong Shop ---------- */
+const css=document.createElement('style');
+css.textContent=`
+.own-chip .use-btn{background:rgba(154,95,201,.35);color:#e6d4f7;border-radius:12px;padding:2px 8px;font-size:.65rem;}
+`;
+document.head.appendChild(css);
+})();
+/* ===== ARCANUM v24: PHÁ GIỚI HẠN NỢ + JOKER ÂM TIỀN + BỎ "HỢP LỐI CHƠI" + DÙNG TAROT NGAY KHI MUA + TIỀN ANTE 1 + XÓA SỔ JOKER ===== */
+(function(){
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+
+/* ---------- A. JOKER PHÁ VỠ LỐI CHƠI: ÂM TIỀN KHÔNG GIỚI HẠN ---------- */
+JOKERS.debtBreaker={key:'debtBreaker',name:'Phá Vỡ Giới Hạn',icon:'♾️',cost:8,rarity:'R',
+ desc:'Kết hợp với Credit Card: XÓA BỎ giới hạn nợ -$20, cho phép âm tiền không giới hạn.',calc:()=>({})};
+
+JOKERS.debtLord={key:'debtLord',name:'Chúa Tể Nợ',icon:'😈',cost:7,rarity:'U',
+ desc:'+3 Mult mỗi $1 đang âm (không giới hạn — càng nợ nhiều càng mạnh).',
+ calc:c=>({mult:c.state.money<0?3*Math.abs(c.state.money):0})};
+
+JOKERS.abyssPit={key:'abyssPit',name:'Hố Sụt Tài Chính',icon:'🕳️',cost:6,rarity:'U',
+ desc:'+15 Chip mỗi $1 đang âm (không giới hạn).',
+ calc:c=>({chips:c.state.money<0?15*Math.abs(c.state.money):0})};
+
+JOKERS.riskGambler={key:'riskGambler',name:'Kẻ Liều Mạng',icon:'🎯',cost:8,rarity:'R',
+ desc:'Khi đang nợ: x(1 + 0.03 × số $ âm) Mult — nợ càng sâu, nhân càng khủng.',
+ calc:c=>c.state.money<0?{xmult:1+0.03*Math.abs(c.state.money)}:{}};
+
+JOKERS.shadowCredit={key:'shadowCredit',name:'Tín Dụng Bóng Tối',icon:'🌑',cost:6,rarity:'U',
+ desc:'Mỗi lần thắng Blind trong lúc đang âm tiền: +2 Mult vĩnh viễn (cộng dồn vô hạn).',
+ calc:c=>({mult:2*(c.state.shadowCreditN||0)})};
+
+const _wbNeg=winBlind;
+winBlind=function(){
+ const wasNeg=S.money<0, hasShadow=has('shadowCredit');
+ _wbNeg();
+ if(hasShadow&&wasNeg)S.shadowCreditN=(S.shadowCreditN||0)+1;
+};
+
+/* ---------- B. XÓA CLAMP -$20: cho phép nợ sâu không giới hạn ---------- */
+const DEBT_OFFSET=1000000;
+function debtUnlocked(){return has('debtBreaker')&&has('creditCard');}
+function noCapWrap(fn){
+ return function(){
+  if(debtUnlocked()){
+   S.money+=DEBT_OFFSET;
+   fn.apply(null,arguments);
+   S.money-=DEBT_OFFSET;
+   render();
+  } else fn.apply(null,arguments);
+ };
+}
+buyJoker=noCapWrap(buyJoker);
+buyConsumable=noCapWrap(buyConsumable);
+buyPack=noCapWrap(buyPack);
+buyVoucher=noCapWrap(buyVoucher);
+rerollShop=noCapWrap(rerollShop);
+
+/* ---------- C. XÓA HỆ THỐNG "HỢP LỐI CHƠI" — Shop random tự nhiên trở lại ---------- */
+function rndJokerKey(){
+ const r=Math.random(),rar=r<0.7?'C':r<0.93?'U':'R';
+ const pool=Object.keys(JOKERS).filter(k=>JOKERS[k].rarity===rar);
+ return pool.length?pool[Math.floor(Math.random()*pool.length)]:Object.keys(JOKERS).filter(k=>JOKERS[k].rarity!=='L')[0];
+}
+const _bsSyn=buildShop;
+buildShop=function(){
+ _bsSyn();
+ if(S.shopOffers&&S.shopOffers.jokers){
+  S.shopOffers.jokers.forEach(o=>{if(o&&o.syn){o.key=rndJokerKey();delete o.syn;}});
+ }
+ if(S.shopOffers&&S.shopOffers.consumables){
+  S.shopOffers.consumables.forEach(c=>{if(c)delete c.syn;});
+ }
+ S.styleTop=null;
+};
+const _rrSyn=rerollShop;
+rerollShop=function(){
+ _rrSyn();
+ if(S.shopOffers&&S.shopOffers.jokers){
+  S.shopOffers.jokers.forEach(o=>{if(o&&o.syn){o.key=rndJokerKey();delete o.syn;}});
+ }
+ S.styleTop=null;
+ render();
+};
+
+/* ---------- D. DÙNG TAROT/PLANET NGAY KHI MUA TRONG SHOP ---------- */
+const _bcUse=buyConsumable;
+buyConsumable=function(idx){
+ const before=S.consumables.length;
+ _bcUse(idx);
+ if(S.consumables.length>before){
+  const item=S.consumables[S.consumables.length-1];
+  beginUseConsumable(item.uid);
+  if(S.selectMode){S.shopReturnPhase='shop';S.phase='playing';render();}
+ }
+};
+const _cuUse=confirmUseConsumable;
+confirmUseConsumable=function(){
+ const back=S.shopReturnPhase;
+ _cuUse();
+ if(back){S.shopReturnPhase=null;S.phase=back;render();}
+};
+const _ccUse=cancelUseConsumable;
+cancelUseConsumable=function(){
+ const back=S.shopReturnPhase;
+ _ccUse();
+ if(back){S.shopReturnPhase=null;S.phase=back;render();}
+};
+
+/* ---------- E. THÊM CHÚT TIỀN ANTE 1 CHO DỄ THỞ ---------- */
+const _ngMoney=newGame;
+newGame=function(k){
+ _ngMoney(k);
+ if(k&&S){S.money+=3;render();}
+};
+
+/* ---------- F. XÓA SỔ JOKER ---------- */
+window.toggleJokerBook=function(){const ex=document.getElementById('jbookModal');if(ex)ex.remove();};
+document.querySelectorAll('.dock-btn').forEach(b=>{if(b.textContent==='📖')b.remove();});
+const _rdsNoBook=renderDeckSelect;
+renderDeckSelect=function(){
+ _rdsNoBook();
+ const app=document.getElementById('app');
+ const b=app&&app.querySelector('[data-jbook]');
+ if(b)b.remove();
+};
+new MutationObserver(muts=>{
+ muts.forEach(m=>{
+  m.addedNodes.forEach(n=>{
+   if(n.nodeType===1&&n.id==='jbookModal')n.remove();
+   if(n.nodeType===1&&n.classList&&n.classList.contains('callout')&&n.textContent&&n.textContent.includes('Sổ Joker'))n.remove();
+  });
+ });
+}).observe(document.body,{childList:true});
+render();
+})();
+/* ===== ARCANUM v25: XÓA HẲN SỔ JOKER + HỆ THỐNG STAKE (ĐỘ KHÓ) + TĂNG ĐIỂM MẠNH DẦN THEO ANTE + JOKER "KÍCH HOẠT LIÊN TỤC" ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.4rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1600);}
+
+/* ================= A. XÓA HẲN SỔ JOKER ================= */
+window.toggleJokerBook=function(){const ex=document.getElementById('jbookModal');if(ex)ex.remove();};
+window.jbClaim=function(){};
+function sweepBook(){
+ document.querySelectorAll('#jbookModal').forEach(e=>e.remove());
+ document.querySelectorAll('[data-jbook]').forEach(e=>e.remove());
+ document.querySelectorAll('.dock-btn, .rules-fab').forEach(b=>{if(b.textContent.trim()==='📖'||b.title==='Sổ sưu tập Joker')b.remove();});
+}
+sweepBook();
+new MutationObserver(muts=>{
+ let need=false;
+ muts.forEach(m=>m.addedNodes.forEach(n=>{
+  if(n.nodeType!==1)return;
+  if(n.id==='jbookModal'||n.hasAttribute&&n.hasAttribute('data-jbook'))need=true;
+  if(n.textContent&&n.textContent.trim()==='📖')need=true;
+  if(n.classList&&n.classList.contains('callout')&&n.textContent&&n.textContent.includes('Sổ Joker'))n.remove();
+ }));
+ if(need)sweepBook();
+}).observe(document.body,{childList:true,subtree:true});
+const _rdsBook=renderDeckSelect;
+renderDeckSelect=function(){_rdsBook();sweepBook();};
+const _rBook=render;
+render=function(){_rBook();sweepBook();};
+
+/* ================= B. STAKE (ĐỘ KHÓ) ================= */
+const STAKES=[
+ {key:'white',name:'Trắng',icon:'⚪',desc:'Độ khó mặc định — chưa có gì thay đổi.'},
+ {key:'red',name:'Đỏ',icon:'🔴',desc:'[+Đỏ] Small Blind không có tiền thưởng.'},
+ {key:'green',name:'Lục',icon:'🟢',desc:'[+Lục] Điểm mục tiêu tăng nhanh hơn qua từng Ante.'},
+ {key:'black',name:'Đen',icon:'⚫',desc:'[+Đen] -1 lượt Bỏ bài mỗi vòng.'},
+ {key:'blue',name:'Lam',icon:'🔵',desc:'[+Lam] -1 cỡ bài trên tay.'},
+ {key:'purple',name:'Tím',icon:'🟣',desc:'[+Tím] Điểm mục tiêu tăng mạnh hơn nữa qua từng Ante.'},
+ {key:'orange',name:'Cam',icon:'🟠',desc:'[+Cam] Giá cả trong Shop +50%.'},
+ {key:'gold',name:'Vàng',icon:'🟡',desc:'[+Vàng] Boss Blind cực khó — điểm mục tiêu Boss nhân thêm x1.5.'},
+];
+const STAKE_LS='arcanumStakeV1';
+function loadStake(){try{return Math.max(0,Math.min(7,parseInt(localStorage.getItem(STAKE_LS))||0));}catch(e){return 0;}}
+function saveStake(i){try{localStorage.setItem(STAKE_LS,String(i));}catch(e){}}
+window._stakeIdx=loadStake();
+window.pickStake=function(i){window._stakeIdx=i;saveStake(i);renderDeckSelect();};
+
+function applyStakeEffects(){
+ const idx=S.stakeIdx=window._stakeIdx||0;
+ if(idx>=1)S.stakeNoSmallReward=true;
+ if(idx>=2)S.stakeGreenGrowth=true;
+ if(idx>=3){S.baseDiscards=Math.max(0,S.baseDiscards-1);S.discardsLeft=S.baseDiscards;}
+ if(idx>=4){S.baseHandSize=Math.max(4,S.baseHandSize-1);S.handSize=S.baseHandSize;}
+ if(idx>=5)S.stakePurpleGrowth=true;
+ if(idx>=6)S.priceMult=(S.priceMult||1)*1.5;
+ if(idx>=7)S.stakeGoldBoss=true;
+}
+const _ngStake=newGame;
+newGame=function(k){
+ _ngStake(k);
+ if(k&&S){applyStakeEffects();render();}
+};
+
+const _brStake=blindRewardFor;
+blindRewardFor=function(idx){
+ let v=_brStake(idx);
+ if(S&&S.stakeNoSmallReward&&idx===0)v=0;
+ return v;
+};
+
+/* ================= C. ĐIỂM TĂNG MẠNH DẦN QUA ANTE + STAKE GREEN/PURPLE ================= */
+const _bsfStake=blindScoreFor;
+blindScoreFor=function(ante,idx){
+ let v=_bsfStake(ante,idx);
+ // Tăng tốc chung: càng về sau Ante, điểm càng tăng mạnh hơn (độc lập với Stake)
+ const accel=1+Math.max(0,ante-4)*0.07;
+ v=Math.round(v*accel);
+ if(S){
+  if(S.stakeGreenGrowth)v=Math.round(v*(1+0.05*(ante-1)));
+  if(S.stakePurpleGrowth)v=Math.round(v*(1+0.08*(ante-1)));
+  if(S.stakeGoldBoss&&idx===2)v=Math.round(v*1.5);
+ }
+ return v;
+};
+
+/* ================= D. GIAO DIỆN CHỌN STAKE Ở MÀN CHỌN BỘ BÀI ================= */
+const _rdsStakeUI=renderDeckSelect;
+renderDeckSelect=function(){
+ _rdsStakeUI();
+ const app=document.getElementById('app');if(!app)return;
+ const h1=app.querySelector('h1');if(!h1||app.querySelector('.stake-row'))return;
+ const idx=window._stakeIdx||0;
+ const rowHtml=`<div class="stake-row">${STAKES.map((s,i)=>`<button class="stake-btn ${i===idx?'active':''} ${i>idx?'':''}" title="${s.name}: ${s.desc}" onclick="pickStake(${i})">${s.icon}</button>`).join('')}</div>
+   <div class="stake-desc">Độ khó: <b style="color:var(--gold)">${STAKES[idx].icon} ${STAKES[idx].name}</b> — ${STAKES[idx].desc}${idx>0?' (Bao gồm mọi hiệu ứng của các Stake thấp hơn.)':''}</div>`;
+ h1.insertAdjacentHTML('afterend',rowHtml);
+};
+
+/* ================= E. JOKER MỚI: BUFF "KÍCH HOẠT ĐIỂM LIÊN TỤC" (RETRIGGER) ================= */
+const RETRIG={
+ echoDau:{name:'Vọng Âm Lá Đầu',icon:'🥇',cost:6,rarity:'U',desc:'[Fan] Lá ĐẦU TIÊN được tính điểm sẽ kích hoạt thêm 1 lần nữa (tổng x2).',calc:()=>({})},
+ vangVongCuoi:{name:'Vọng Âm Lá Cuối',icon:'🥉',cost:6,rarity:'U',desc:'[Fan] Lá CUỐI CÙNG được tính điểm sẽ kích hoạt thêm 1 lần nữa (tổng x2).',calc:()=>({})},
+ tamTrungGiua:{name:'Tam Trùng Trung Tâm',icon:'🎯',cost:9,rarity:'R',desc:'[Fan] Lá Ở GIỮA (trong các lá được tính điểm) kích hoạt thêm 2 lần nữa (tổng x3).',calc:()=>({})},
+ songTrungLe:{name:'Song Trùng Số Lẻ',icon:'1️⃣',cost:7,rarity:'R',desc:'[Fan] Mỗi lá ở vị trí LẺ (1, 3, 5...) trong số lá được tính điểm: kích hoạt thêm 1 lần.',calc:()=>({})},
+ songTrungChan:{name:'Song Trùng Số Chẵn',icon:'2️⃣',cost:7,rarity:'R',desc:'[Fan] Mỗi lá ở vị trí CHẴN (2, 4, 6...) trong số lá được tính điểm: kích hoạt thêm 1 lần.',calc:()=>({})},
+ echoNgauNhien:{name:'Vọng Âm Ngẫu Nhiên',icon:'🎲',cost:5,rarity:'C',desc:'[Fan] 1 lá ngẫu nhiên trong số lá được tính điểm: kích hoạt thêm 1 lần.',calc:()=>({})},
+ daiVongMoiLa:{name:'Đại Vọng Mọi Lá',icon:'🌌',cost:14,rarity:'L',desc:'[Fan] TOÀN BỘ lá được tính điểm sẽ kích hoạt thêm 1 lần nữa (nhân đôi toàn bộ Chip/Mult từ lá bài).',calc:()=>({})},
+};
+Object.entries(RETRIG).forEach(([k,d])=>{d.key=k;JOKERS[k]=d;});
+
+function cardContribution(c){
+ let cc=rankChips(c.rank);
+ if(c.enh==='bonus')cc+=30;
+ if(c.enh==='stone')cc=50;
+ if(c.enh==='wild')cc+=10;
+ if(c.edition==='foil')cc+=50;
+ let mDelta=0,mMulti=1,luckyHit=false;
+ if(c.enh==='mult')mDelta+=4;
+ if(c.edition==='holo')mDelta+=10;
+ if(c.enh==='glass')mMulti*=2;
+ if(c.edition==='poly')mMulti*=1.5;
+ if(c.enh==='lucky'&&Math.random()<0.2){mDelta+=20;luckyHit=true;}
+ return{cc,mDelta,mMulti,luckyHit};
+}
+function pushRetrigger(b,c,tagIcon){
+ const{cc,mDelta,mMulti,luckyHit}=cardContribution(c);
+ b.chips+=cc;b.mult+=mDelta;b.mult*=mMulti;
+ b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));
+ let ft='';
+ if(cc)ft+=`+${cc}`;
+ if(mDelta)ft+=(ft?' ':'')+`+${mDelta}✦`;
+ if(mMulti!==1)ft+=(ft?' ':'')+`x${mMulti.toFixed(1)}✦`;
+ if(luckyHit)ft+=' 🍀';
+ b.steps.push({label:`${tagIcon} ${rankLabel(c.rank)}${SUITS[c.suit].sym} (kích hoạt lại)`,chipDelta:cc,multDelta:mDelta,multMulti:mMulti,targetSel:`[data-cid="${c.id}"]`,floatText:ft,floatColor:'#ffd76a',delay:170});
+}
+const _bssRT=buildScoreSteps;
+buildScoreSteps=function(played){
+ const b=_bssRT(played);
+ try{
+  const raw=b.scoring||[];
+  const effScoring=raw.filter(c=>!(S.debuffSuit&&c.suit===S.debuffSuit&&c.enh!=='wild'));
+  if(!effScoring.length)return b;
+  if(has('echoDau'))pushRetrigger(b,effScoring[0],'🥇');
+  if(has('vangVongCuoi'))pushRetrigger(b,effScoring[effScoring.length-1],'🥉');
+  if(has('tamTrungGiua')){const mid=effScoring[Math.floor((effScoring.length-1)/2)];pushRetrigger(b,mid,'🎯');pushRetrigger(b,mid,'🎯');}
+  if(has('songTrungLe'))effScoring.forEach((c,i)=>{if(i%2===0)pushRetrigger(b,c,'1️⃣');});
+  if(has('songTrungChan'))effScoring.forEach((c,i)=>{if(i%2===1)pushRetrigger(b,c,'2️⃣');});
+  if(has('echoNgauNhien'))pushRetrigger(b,pick(effScoring),'🎲');
+  if(has('daiVongMoiLa'))effScoring.forEach(c=>pushRetrigger(b,c,'🌌'));
+ }catch(e){console.error(e);}
+ return b;
+};
+
+/* ================= F. CSS ================= */
+const css=document.createElement('style');
+css.textContent=`
+.stake-row{display:flex;justify-content:center;gap:6px;margin:10px 0 4px;flex-wrap:wrap;}
+.stake-btn{width:40px;height:40px;border-radius:50%;font-size:1.15rem;background:rgba(0,0,0,.25);border:2px solid var(--panel-edge);transition:transform .12s,box-shadow .12s;}
+.stake-btn:hover{transform:translateY(-3px);}
+.stake-btn.active{border-color:var(--gold);box-shadow:0 0 12px 3px rgba(240,184,75,.5);transform:scale(1.12);}
+.stake-desc{text-align:center;font-size:.78rem;color:var(--text-lo);margin-bottom:10px;max-width:520px;margin-left:auto;margin-right:auto;}
+`;
+document.head.appendChild(css);
+if(!S)renderDeckSelect();
+})();
+/* ===== ARCANUM v26: BOSS BALATRO CÒN THIẾU + BOSS SÁNG TẠO + VOUCHER XU HƯỚNG + BỘ BÀI BALATRO MỚI + JOKER THEO YÊU CẦU ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.4rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1600);}
+
+/* ================= A. BOSS BALATRO GỐC CÒN THIẾU ================= */
+BOSSES.push(
+ {key:'theEye',name:'The Eye',desc:'Không được chơi lặp lại CÙNG 1 loại bài poker trong suốt Blind này.',apply:st=>{st.eyeSeen={};}},
+ {key:'theMouth',name:'The Mouth',desc:'Cả Blind chỉ được phép chơi DUY NHẤT 1 loại bài poker (loại đầu tiên bạn đánh).',apply:st=>{st.mouthLock=null;}},
+ {key:'thePlant',name:'The Plant',desc:'Mọi lá mặt (J, Q, K) bị vô hiệu hóa.',apply:st=>{st.plantDebuff=true;}},
+ {key:'theSerpent',name:'The Serpent',desc:'Sau mỗi lượt Chơi HOẶC Bỏ bài, tay bài luôn rút lại chỉ còn 3 lá trước khi rút bù.',apply:st=>{st.serpentMode=true;}},
+ {key:'theArm2',name:'The Arm II',desc:'Đầu Blind: hạ 1 cấp CẢ 3 loại bài bạn đã lên cấp cao nhất.',apply:st=>{const top=Object.entries(st.handLevels).filter(([k,v])=>v>1).sort((a,b)=>b[1]-a[1]).slice(0,3);top.forEach(([k])=>{st.handLevels[k]=Math.max(1,st.handLevels[k]-1);});}},
+ {key:'cerulean',name:'Cerulean Bell',desc:'1 lá ngẫu nhiên trên tay bị buộc phải chọn và không thể bỏ chọn trong lượt chơi đầu tiên.',apply:st=>{st.ceruleanForce=null;}}
+);
+
+/* ================= B. BOSS SÁNG TẠO MỚI ================= */
+BOSSES.push(
+ {key:'mirage',name:'Ảo Ảnh',desc:'Toàn bộ Enhancement trên tay bị ẩn (không hiển thị màu) trong suốt Blind.',apply:st=>{st.mirageMode=true;}},
+ {key:'quicksand',name:'Cát Lún',desc:'Mỗi lượt Chơi bài, cỡ bài trên tay giảm 1 (tối thiểu 3), hồi lại đầu Blind sau.',apply:st=>{st.quicksandN=0;}},
+ {key:'auction',name:'Phiên Đấu Giá',desc:'Giá mọi thứ trong Shop kế tiếp +100%, nhưng thắng Blind này thưởng x2 tiền.',apply:st=>{st.auctionBoss=true;}},
+ {key:'reflection',name:'Phản Chiếu',desc:'Điểm Chip và Mult bị hoán đổi cho nhau khi tính điểm.',apply:st=>{st.reflectBoss=true;}},
+ {key:'curfew',name:'Giới Nghiêm',desc:'Chỉ được sử dụng Tarot/Planet/Hoàng Đạo ở lượt Chơi bài ĐẦU TIÊN.',apply:st=>{st.curfewBoss=true;}}
+);
+
+/* ---- Hook cho Boss mới ---- */
+const bossOn26=k=>!!(S&&S.boss&&String(S.boss.key).replace('_off_','')===k&&!S.jokers.some(j=>j.key==='chicot'));
+const _bssBoss26=buildScoreSteps;
+buildScoreSteps=function(played){
+ const b=_bssBoss26(played);
+ if(bossOn26('reflection')){const c=b.chips,m=b.mult;b.chips=m;b.mult=c;b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));b.steps.push({label:'🪞 Phản Chiếu — hoán đổi',chipDelta:0,multDelta:0,multMulti:1,floatText:'🔄',floatColor:'#c9a0ff',delay:200});}
+ if(bossOn26('thePlant')){const face=b.scoring.filter(c=>c.rank>=11&&c.rank<=13);let sub=0,mm=0;face.forEach(c=>{sub+=rankChips(c.rank);});b.chips=Math.max(0,b.chips-sub);b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));}
+ return b;
+};
+const _fsBoss26=finalizeScore;
+finalizeScore=function(b){
+ if(bossOn26('theEye')){S.eyeSeen=S.eyeSeen||{};if(S.eyeSeen[b.type]){S.currentScore=Math.max(0,S.currentScore-0);say('👁 The Eye: loại bài đã dùng, điểm không được cộng thêm lần nữa!','#ffb3ab');b.total=0;}S.eyeSeen[b.type]=1;}
+ if(bossOn26('theMouth')){if(!S.mouthLock)S.mouthLock=b.type;else if(S.mouthLock!==b.type){say('👄 The Mouth: chỉ '+HAND_TYPES[S.mouthLock].name+' mới được tính!','#ffb3ab');b.total=0;}}
+ _fsBoss26(b);
+ if(bossOn26('quicksand')){S.quicksandN=(S.quicksandN||0)+1;S.handSize=Math.max(3,S.handSize-1);}
+};
+const _sbBoss26=setupBlind;
+setupBlind=function(){
+ _sbBoss26();
+ S.eyeSeen={};S.mouthLock=null;S.quicksandN=0;S.ceruleanForce=null;
+ if(S.boss&&S.boss.key==='cerulean'&&S.deck.length)S.ceruleanForce=S.deck[S.deck.length-1].id;
+};
+const _wbBoss26=winBlind;
+winBlind=function(){
+ const auction=bossOn26('auction');
+ _wbBoss26();
+ if(auction){S.money+=S.lastReward||0;S.auctionActive=true;}
+ else S.auctionActive=false;
+};
+const _bsBoss26=buildShop;
+buildShop=function(){_bsBoss26();if(S.auctionActive){S.priceMult=(S.priceMult||1)*2;S.auctionActive=false;}};
+const _tsBoss26=toggleSelect;
+toggleSelect=function(id){if(S&&S.ceruleanForce&&id!==S.ceruleanForce&&!S.selected.includes(S.ceruleanForce)&&S.handsLeft===S.roundHandsTotal){say('🔔 Cerulean Bell buộc chọn 1 lá cố định trước!','#ffb3ab');S.selected=[S.ceruleanForce];render();return;}_tsBoss26(id);};
+const _bucBoss26=beginUseConsumable;
+beginUseConsumable=function(u){if(S&&bossOn26('curfew')&&S.handsLeft<S.roundHandsTotal){say('🌙 Giới Nghiêm: chỉ dùng được ở lượt đầu tiên!','#ffb3ab');return;}_bucBoss26(u);};
+
+/* ================= C. VOUCHER XU HƯỚNG ================= */
+Object.assign(VOUCHERS,{
+ trendReader:{name:'Đọc Vị Xu Hướng',icon:'🧭',cost:12,desc:'Bộ bài rút ưu tiên đưa ra CHẤT và BẬC bạn đã đánh nhiều nhất trong ván.',apply:st=>{st.deckBias=true;}},
+ starPlanner:{name:'Nhà Hoạch Định Sao',icon:'🪐',cost:12,desc:'Shop ưu tiên Planet của loại bài bạn đang có CẤP CAO NHẤT.',apply:st=>{st.planetBias=true;}},
+ handTrend:{name:'Xu Hướng Tay Bài',icon:'📊',cost:12,desc:'Shop ưu tiên Joker liên quan tới loại bài bạn đã CHƠI NHIỀU LẦN NHẤT.',apply:st=>{st.jokerTrendBias=true;}},
+});
+// Ghi lại tần suất chất/bậc/loại bài đã đánh
+const _fsTrend26=finalizeScore;
+finalizeScore=function(b){
+ const sc=(b.scoring||[]);
+ S.suitPlayCount=S.suitPlayCount||{};S.rankPlayCount=S.rankPlayCount||{};
+ sc.forEach(c=>{S.suitPlayCount[c.suit]=(S.suitPlayCount[c.suit]||0)+1;S.rankPlayCount[c.rank]=(S.rankPlayCount[c.rank]||0)+1;});
+ _fsTrend26(b);
+};
+// Bộ bài rút thiên vị theo xu hướng: sắp lại S.deck (pop() lấy từ cuối mảng) mỗi lần rút
+const _dtTrend26=drawTo;
+drawTo=function(n){
+ if(S.deckBias&&S.deck.length>1){
+  const wS=S.suitPlayCount||{},wR=S.rankPlayCount||{};
+  const w=c=>(wS[c.suit]||0)+(wR[c.rank]||0)+Math.random()*2;
+  S.deck.sort((a,b)=>w(a)-w(b)); // trọng số cao nằm cuối mảng => được pop() (rút) trước
+ }
+ _dtTrend26(n);
+};
+// Shop ưu tiên Planet theo cấp cao nhất
+const _bsTrend26=buildShop;
+buildShop=function(){
+ _bsTrend26();
+ if(!S||!S.shopOffers)return;
+ if(S.planetBias&&S.shopOffers.consumables.length){
+  const top=Object.entries(S.handLevels).filter(([k])=>k!=='ALL').sort((a,b)=>b[1]-a[1])[0];
+  const pk=top&&Object.keys(PLANETS).find(k=>PLANETS[k].hand===top[0]);
+  if(pk)S.shopOffers.consumables[S.shopOffers.consumables.length-1]={type:'planet',key:pk};
+ }
+ if(S.jokerTrendBias&&S.shopOffers.jokers.length){
+  let mk=null,mx=-1;Object.entries(S.handPlayCounts).forEach(([k,v])=>{if(v>mx){mx=v;mk=k;}});
+  if(mk&&mx>0){
+   const re=new RegExp(HAND_TYPES[mk].name.split(' ')[0],'i');
+   const pool=Object.keys(JOKERS).filter(k=>JOKERS[k].rarity!=='L'&&(re.test(JOKERS[k].desc)||re.test(JOKERS[k].name)));
+   if(pool.length)S.shopOffers.jokers[0]={key:pick(pool),edition:rollJokerEdition(S.editionBoost)};
+  }
+ }
+};
+
+/* ================= D. BỘ BÀI BALATRO GỐC CÒN THIẾU ================= */
+Object.assign(DECKS,{
+ nebula:{name:'Nebula Deck',icon:'🌫️',desc:'+1 khay Tarot/Planet, nhưng -1 khay Joker.',req:'Sở hữu 4 Joker cùng lúc trong 1 ván.',apply:s=>{s.maxConsumableSlots+=1;s.maxJokerSlots=Math.max(1,s.maxJokerSlots-1);}},
+ ghost:{name:'Ghost Deck',icon:'👻',desc:'Spectral Card có thể xuất hiện trong Arcana Pack (thêm 1 lựa chọn Spectral).',req:'Dùng 3 lá Spectral trong 1 ván.',apply:s=>{s.ghostDeck=true;}},
+ anaglyph:{name:'Anaglyph Deck',icon:'🥽',desc:'Sau mỗi Boss Blind thắng, nhận ngay 1 Double Tag (2 Tag cùng lúc lần bỏ qua kế tiếp).',req:'Hạ 4 Boss Blind (tích lũy).',apply:s=>{s.anaglyphDeck=true;}},
+});
+const _opGhost26=openPack;
+openPack=function(kind){
+ if(kind==='tarot'&&S&&S.ghostDeck){
+  const opts=[];for(let i=0;i<2;i++)opts.push({type:'tarot',key:randKey(TAROTS)});
+  opts.push({type:'spectral',key:randKey(SPECTRALS)});
+  S.packPicking={options:opts,kind:'tarot'};render();return;
+ }
+ _opGhost26(kind);
+};
+const _pfGhost26=pickFromPack;
+pickFromPack=function(i){
+ if(S&&S.packPicking&&S.packPicking.options[i]&&S.packPicking.options[i].type==='spectral'&&S.packPicking.kind==='tarot'){
+  const def=SPECTRALS[S.packPicking.options[i].key];const msg=def.effect([],S);S.message=`${def.name}: ${msg}`;S.tarotUsedCount=(S.tarotUsedCount||0)+1;S.packPicking=null;render();return;
+ }
+ _pfGhost26(i);
+};
+const _wbAna26=winBlind;
+winBlind=function(){const ana=S&&S.anaglyphDeck&&S.blindIdx===2;_wbAna26();if(ana){S.doubleTag=true;say('🥽 Anaglyph: nhận Double Tag lần bỏ qua tới!','#7fe3ff');}};
+const _caGhost26=checkAchievements;
+checkAchievements=function(){
+ _caGhost26();if(!S)return;let ch=false;
+ if(activeJokerCount(S)>=4&&unlockDeck('nebula'))ch=true;
+ if((ACH.bossKills||0)>=4&&unlockDeck('anaglyph'))ch=true;
+ if((S.tarotUsedCount||0)>=0){} // giữ chỗ, điều kiện ghost dùng biến riêng bên dưới
+ if(ch)saveAch(ACH);
+};
+const _fsGhostAch26=finalizeScore;
+finalizeScore=function(b){_fsGhostAch26(b);};
+const _cuGhostAch26=confirmUseConsumable;
+confirmUseConsumable=function(){
+ const wasSpectral=false; // Spectral dùng effect ngay, không qua confirmUseConsumable (min/max=0 auto)
+ _cuGhostAch26();
+};
+
+/* ================= E. JOKER THEO YÊU CẦU ================= */
+// 1) Mục Sư: +0.2 Mult VĨNH VIỄN mỗi lá Enhancement được chơi, rồi XÓA Enhancement của lá đó (tích vô hạn)
+JOKERS.preacher={key:'preacher',name:'Mục Sư',icon:'🙏',cost:7,rarity:'R',
+ desc:'Mỗi lá có Enhancement được tính điểm: +0.2 Mult VĨNH VIỄN (tích lũy vô hạn), rồi lá đó bị gỡ bỏ Enhancement.',
+ calc:c=>({mult:c.state.preacherMult||0})};
+const _fsPreacher26=finalizeScore;
+finalizeScore=function(b){
+ if(has('preacher')){
+  const sc=(b.scoring||[]).filter(c=>c.enh&&c.enh!=='none');
+  if(sc.length){
+   S.preacherMult=(S.preacherMult||0)+0.2*sc.length;
+   sc.forEach(c=>{c.enh='none';const f=S.fullDeck.find(x=>x.id===c.id);if(f)f.enh='none';});
+   say('🙏 Mục Sư gỡ '+sc.length+' Enhancement (+'+(0.2*sc.length).toFixed(1)+' Mult vĩnh viễn)','#c9a0ff');
+  }
+ }
+ _fsPreacher26(b);
+};
+
+// 2) The Duo / The Trio / The Family bản gốc Balatro (x2/x3/x4 Mult)
+JOKERS.realDuo={key:'realDuo',name:'The Duo ',icon:'👯‍♂️',cost:8,rarity:'R',desc:'x2 Mult nếu tay bài có Đôi.',calc:c=>({xmult:hasGroup(c.scoringCards,2)?2:1})};
+JOKERS.realTrio={key:'realTrio',name:'The Trio ',icon:'👨‍👨‍👦',cost:8,rarity:'R',desc:'x3 Mult nếu tay bài có Sám (Three of a Kind trở lên).',calc:c=>({xmult:hasGroup(c.scoringCards,3)?3:1})};
+JOKERS.realFamily={key:'realFamily',name:'The Family ',icon:'👨‍👩‍👧‍👦',cost:8,rarity:'R',desc:'x4 Mult nếu tay bài có Tứ Quý trở lên.',calc:c=>({xmult:hasGroup(c.scoringCards,4)?4:1})};
+
+// 3) Joker Đôi: +0.5 Mult mỗi cặp Đôi có trong lá được tính (không giới hạn số cặp)
+JOKERS.pairMaster={key:'pairMaster',name:'Chúa Tể Cặp Đôi',icon:'👥',cost:6,rarity:'U',
+ desc:'+0.5 Mult mỗi cặp Đôi có trong lá được tính điểm (1 Đôi = +0.5, không giới hạn số cặp).',
+ calc:c=>{const m={};c.scoringCards.forEach(x=>m[x.rank]=(m[x.rank]||0)+1);let pairs=0;Object.values(m).forEach(v=>{pairs+=Math.floor(v/2);});return{mult:0.5*pairs};}};
+
+// 4) Trading Card nâng cấp: Bỏ đúng 1 lá duy nhất → phá hủy lá đó vĩnh viễn + $3 (thay vì chỉ +$3)
+const _dsTrading26=discardSelected;
+discardSelected=function(){
+ const single=S.discardsLeft>0&&S.selected.length===1&&has('tradingCard');
+ const targetId=single?S.selected[0]:null;
+ _dsTrading26();
+ if(single&&targetId){
+  S.fullDeck=S.fullDeck.filter(c=>c.id!==targetId);
+  say('🎴 Trading Card: phá hủy lá bài, +$3!','#ffd76a');
+ }
+};
+
+/* ================= F. CSS nhẹ cho callout mới (dùng lại .callout có sẵn) ================= */
+
+})();
+/* ===== ARCANUM v27: FIX HIỆN BỘ BÀI MỚI + JOKER THIÊN VỊ SỐ/LÁ MẶT + JOKER HIẾN TẾ ===== */
+(function(){
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.4rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1600);}
+
+/* ================= A. JOKER THIÊN VỊ SỐ (Uncommon) & LÁ MẶT (Rare) ================= */
+JOKERS.numberSeeker={key:'numberSeeker',name:'Thợ Săn Số',icon:'🔢',cost:6,rarity:'U',
+ desc:'Tăng mạnh tỉ lệ rút được lá SỐ (2–10) từ bộ bài.',calc:()=>({})};
+JOKERS.faceHunter={key:'faceHunter',name:'Thợ Săn Mặt Người',icon:'🎭',cost:8,rarity:'R',
+ desc:'Tăng mạnh tỉ lệ rút được lá MẶT (J, Q, K) từ bộ bài.',calc:()=>({})};
+
+function biasWeight(c){
+ let w=0;
+ if(has('numberSeeker')&&c.rank>=2&&c.rank<=10)w+=6;
+ if(has('faceHunter')&&c.rank>=11&&c.rank<=13)w+=7;
+ return w;
+}
+const _dt27=drawTo; // bọc lại drawTo (đã bị các bản trước bọc), giữ nguyên hiệu ứng cũ
+drawTo=function(n){
+ if((has('numberSeeker')||has('faceHunter'))&&S.deck.length>1){
+  S.deck.forEach(c=>c._w27=biasWeight(c)+Math.random()*3);
+  S.deck.sort((a,b)=>a._w27-b._w27); // trọng số cao nằm cuối mảng => được pop() (rút) trước
+ }
+ _dt27(n);
+};
+
+/* ================= B. JOKER HIẾN TẾ ================= */
+JOKERS.sacrificer={key:'sacrificer',name:'Thầy Tế Cổ Xưa',icon:'🩸',cost:8,rarity:'R',
+ desc:'Mỗi vòng, có thể hiến tế (phá hủy vĩnh viễn) 1 lá trên tay để nhận +$3 và +3 Mult VĨNH VIỄN (tích lũy vô hạn qua các vòng).',
+ calc:c=>({mult:3*(c.state.sacrificeCount||0)})};
+
+const _sbSac27=setupBlind;
+setupBlind=function(){_sbSac27();S.sacrificedThisRound=false;};
+
+window.beginSacrifice=function(){
+ if(!S||S.phase!=='playing'||!has('sacrificer')||S.sacrificedThisRound)return;
+ S.selectMode={sacrifice:true,min:1,max:1};S.selected=[];
+ S.message='🩸 Chọn 1 lá để hiến tế (phá hủy vĩnh viễn khỏi bộ bài).';render();
+};
+window.confirmSacrifice=function(){
+ if(!S||!S.selectMode||!S.selectMode.sacrifice)return;
+ if(S.selected.length!==1){S.message='Cần chọn đúng 1 lá.';render();return;}
+ const id=S.selected[0];
+ S.hand=S.hand.filter(c=>c.id!==id);
+ S.fullDeck=S.fullDeck.filter(c=>c.id!==id);
+ S.deck=S.deck.filter(c=>c.id!==id);
+ S.sacrificeCount=(S.sacrificeCount||0)+1;
+ S.sacrificedThisRound=true;
+ S.money+=3;
+ drawTo(S.handSize);applySort();
+ S.selected=[];S.selectMode=null;S.justDealt=true;
+ S.message='🩸 Đã hiến tế! +$3, +3 Mult vĩnh viễn (tổng: '+S.sacrificeCount+').';
+ say('🩸 HIẾN TẾ THÀNH CÔNG!','#e0495a');
+ render();
+};
+window.cancelSacrifice=function(){S.selectMode=null;S.selected=[];S.message='Đã hủy hiến tế.';render();};
+
+// Chèn nút "Hiến tế" và sửa nút Xác nhận/Hủy khi đang ở chế độ hiến tế (không đụng vào render gốc)
+const _r27=render;
+render=function(){
+ _r27();
+ try{
+  if(!S||S.phase!=='playing')return;
+  const ctr=document.querySelector('.field .controls');if(!ctr)return;
+  if(S.selectMode&&S.selectMode.sacrifice){
+   ctr.innerHTML=`<button class="btn danger" onclick="confirmSacrifice()">🩸 Xác nhận Hiến tế</button><button class="btn secondary" onclick="cancelSacrifice()">Hủy</button>`;
+   const banner=document.querySelector('.select-mode-banner');if(banner)banner.style.borderColor='#e0495a';
+  } else if(has('sacrificer')&&!S.sacrificedThisRound&&!S.selectMode&&!ctr.querySelector('[data-sac]')){
+   ctr.insertAdjacentHTML('beforeend','<button class="btn danger small" data-sac onclick="beginSacrifice()">🩸 Hiến tế</button>');
+  }
+ }catch(e){console.error(e);}
+};
+
+/* ================= C. FIX: đảm bảo màn chọn bộ bài luôn hiện đủ mọi bộ bài đã đăng ký ================= */
+if(!S)renderDeckSelect();
+})();
+
+/* ===== ARCANUM v28: SỬA THẦY TẾ CỔ XƯA — HIẾN TẾ CHÍNH JOKER ĐỂ COPY 1 LÁ TRONG BỘ BÀI ===== */
+(function(){
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.4rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1600);}
+
+/* ---- Đổi mô tả + hiệu ứng: Joker này chỉ tồn tại để hiến tế, không cộng điểm gì ---- */
+Object.assign(JOKERS.sacrificer,{
+ icon:'🩸',
+ desc:'Bấm để HIẾN TẾ (phá hủy) chính lá Joker này, đổi lấy quyền chọn 1 lá bất kỳ trong bộ bài và tạo ra 1 bản sao y hệt thêm vào bộ bài. Dùng được 1 lần rồi biến mất.',
+ calc:()=>({})
+});
+
+/* ---- Mở bảng chọn lá để copy ---- */
+window.beginSacrifice=function(){
+ if(!S||!has('sacrificer'))return;
+ const order={S:0,H:1,D:2,C:3};
+ const seen=new Set(),list=[];
+ S.fullDeck.forEach(c=>{const key=c.rank+c.suit;if(!seen.has(key)){seen.add(key);list.push(c);}});
+ list.sort((a,b)=>(order[a.suit]-order[b.suit])||(a.rank-b.rank));
+ S.sacrificePicking=list;
+ render();
+};
+window.doSacrificeCopy=function(cardId){
+ if(!S||!S.sacrificePicking)return;
+ const src=S.fullDeck.find(c=>c.id===cardId);if(!src)return;
+ S.fullDeck.push({...src,id:uid()}); // tạo bản sao y hệt (giữ nguyên enh/edition/seal)
+ S.jokers=S.jokers.filter(j=>j.key!=='sacrificer'); // Joker biến mất sau khi hiến tế
+ S.sacrificePicking=null;
+ S.message='🩸 Đã hiến tế Thầy Tế! Bộ bài nhận thêm 1 bản sao của '+rankLabel(src.rank)+SUITS[src.suit].sym+'.';
+ say('🩸 HIẾN TẾ THÀNH CÔNG!','#e0495a');
+ render();
+};
+window.cancelSacrifice=function(){S.sacrificePicking=null;render();};
+
+function sacrificeModalHTML(){
+ const order={S:0,H:1,D:2,C:3};
+ const items=S.sacrificePicking.map(c=>{
+  const tag=(c.enh&&c.enh!=='none')?`<span class="dm-tag">${c.enh}</span>`:(c.edition&&c.edition!=='none'?`<span class="dm-tag">${c.edition}</span>`:'');
+  return `<div class="deck-mini ${SUITS[c.suit].color}" style="cursor:pointer" onclick="doSacrificeCopy('${c.id}')"><div>${rankLabel(c.rank)}</div><div class="dm-suit">${SUITS[c.suit].sym}</div>${tag}</div>`;
+ }).join('');
+ return `<div class="overlay"><div class="modal"><h2>🩸 Hiến Tế — Chọn lá để Copy</h2><p>Chọn 1 lá bất kỳ trong bộ bài (${S.sacrificePicking.length} loại). Thầy Tế sẽ biến mất, bộ bài nhận thêm 1 bản sao của lá bạn chọn.</p><div class="deck-grid" style="max-height:56vh">${items}</div><div class="controls" style="margin-top:14px;"><button class="btn ghost" onclick="cancelSacrifice()">Hủy</button></div></div></div>`;
+}
+
+/* ---- Ghi đè render: hiện modal chọn lá + nút Hiến tế đúng chỗ (không còn chọn bài trên tay) ---- */
+const _r28=render;
+render=function(){
+ if(S&&S.sacrificePicking){
+  const app=document.getElementById('app');
+  if(app)app.innerHTML=sacrificeModalHTML();
+  return;
+ }
+ _r28();
+ try{
+  if(!S||S.phase!=='playing')return;
+  const ctr=document.querySelector('.field .controls');if(!ctr)return;
+  const old=ctr.querySelector('[data-sac]');if(old)old.remove();
+  if(has('sacrificer'))ctr.insertAdjacentHTML('beforeend','<button class="btn danger small" data-sac onclick="beginSacrifice()">🩸 Hiến tế Joker</button>');
+ }catch(e){console.error(e);}
+};
+})();
+/* ===== ARCANUM v29: HIỆU ỨNG ĂN ĐIỂM RÕ HƠN + JOKER "BÓP BÓP" + STAKE MỚI + EDITION MỚI ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.4rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1600);}
+
+/* ================= A. ÂM THANH + HIỆU ỨNG RÕ HƠN ================= */
+function ac29(){window._ac29=window._ac29||new (window.AudioContext||window.webkitAudioContext)();if(window._ac29.state==='suspended')window._ac29.resume();return window._ac29;}
+function tone29(freq,dur,type,vol,delay){
+ if(!window._soundOn)return;
+ try{
+  const a=ac29(),o=a.createOscillator(),g=a.createGain();
+  o.type=type||'sine';o.frequency.value=freq;
+  const t0=a.currentTime+(delay||0);
+  g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol||.15,t0+.015);g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  o.connect(g);g.connect(a.destination);o.start(t0);o.stop(t0+dur+.02);
+ }catch(e){}
+}
+const _phA29=window.playHitSound;
+window.playHitSound=function(step,idx){
+ if(_phA29)_phA29(step,idx);
+ const big=step&&(step.big||(step.multMulti&&step.multMulti>1)||Math.abs(step.multDelta||0)>=8);
+ const base=520+Math.min(1200,idx*22);
+ tone29(base*1.5,0.12,'triangle',big?0.17:0.08,0.01);
+ if(big)tone29(base*2,0.18,'square',0.13,0.03);
+};
+const _peA29=window.playScoreExplosion;
+window.playScoreExplosion=function(total,target){
+ if(_peA29)_peA29(total,target);
+ const ratio=total/Math.max(1,target||total);
+ if(ratio>=1)[261,329,392,523].forEach((f,i)=>tone29(f,0.5,'sine',0.15,i*0.045));
+};
+const _fsFx29=finalizeScore;
+finalizeScore=function(b){
+ const ratio=b.total/Math.max(1,S.blindScore);
+ _fsFx29(b);
+ if(ratio>=2&&typeof spawnConfetti==='function')spawnConfetti();
+};
+const cssFx29=document.createElement('style');
+cssFx29.textContent=`
+.card.hit,.card.in-play.hit{animation:hitPunch29 .46s cubic-bezier(.2,.9,.3,1.4) !important;}
+@keyframes hitPunch29{0%{transform:translateY(-6px) scale(1);filter:brightness(1);}30%{transform:translateY(-24px) scale(1.3) rotate(-3deg);filter:brightness(1.7) drop-shadow(0 0 16px #ffe28a);}100%{transform:translateY(-6px) scale(1);filter:brightness(1);}}
+.joker-card.hit,.consumable-card.hit{animation:jokerPunch29 .52s cubic-bezier(.2,.9,.3,1.4) !important;}
+@keyframes jokerPunch29{0%{transform:scale(1);}35%{transform:scale(1.38) rotate(-6deg);filter:brightness(1.8) drop-shadow(0 0 18px #ffd76a);}100%{transform:scale(1);}}
+.float-num{font-size:1.28rem!important;font-weight:800!important;text-shadow:0 2px 6px rgba(0,0,0,.85),0 0 12px currentColor!important;}
+`;
+document.head.appendChild(cssFx29);
+
+/* ================= B. JOKER "BÓP BÓP" — RỦI RO MULT CỘNG DỒN ================= */
+const isStr29=c=>c.handType==='Straight'||c.handType==='StraightFlush';
+const isFl29=c=>['Flush','StraightFlush','FlushHouse','FlushFive'].includes(c.handType);
+const is429=c=>['FourKind','FiveKind','FlushFive'].includes(c.handType);
+const hasPair29=c=>{const m={};c.scoringCards.forEach(x=>m[x.rank]=(m[x.rank]||0)+1);return Object.values(m).some(v=>v>=2);};
+function mkSqueeze(key,icon,cost,rarity,name,condDesc,gain,condFn){
+ JOKERS[key]={key,icon,cost,rarity,name,
+  desc:` [Bóp bóp] Nếu ${condDesc}: +${gain} Mult (cộng dồn vĩnh viễn cho các lượt sau). Nếu KHÔNG: mất hết Mult đã tích lũy và bị trừ Mult tương ứng ngay lượt đó.`,
+  calc:c=>{
+   const self=c.self;if(self._sq==null)self._sq=0;
+   if(condFn(c)){const bonus=self._sq;self._sq+=gain;return{mult:bonus};}
+   const lost=self._sq;self._sq=0;
+   return lost>0?{mult:-lost}:{};
+  }};
+}
+mkSqueeze('balloonPair','🎈',5,'C','Bóng Bay Đôi','tay bài có Đôi trở lên',4,hasPair29);
+mkSqueeze('balloonFlush','🎈',6,'U','Bóng Bay Thùng','đánh ra Thùng (Flush)',6,isFl29);
+mkSqueeze('balloonStraight','🎈',6,'U','Bóng Bay Sảnh','đánh ra Sảnh (Straight)',6,isStr29);
+mkSqueeze('balloonFive','🎈',5,'C','Bóng Bay Ngũ Liên','chơi đúng 5 lá',3,c=>c.playedCards.length===5);
+mkSqueeze('balloonHeld','🎈',6,'U','Bóng Bay Giữ Tay','giữ lại ≥3 lá trên tay',4,c=>c.heldCards.length>=3);
+mkSqueeze('balloonMega','🎈',12,'L','Đại Bóng Bay Vũ Trụ','đánh ra Sảnh/Thùng/Tứ Quý trở lên',10,c=>isStr29(c)||isFl29(c)||is429(c));
+
+// Hiện dòng "Đang tích lũy" khi bấm vào Joker để xem thông tin
+const _si29=window.showInfo;
+window.showInfo=function(kind,id){
+ _si29(kind,id);
+ try{
+  if(kind==='joker'){
+   const j=S.jokers.find(x=>x.uid===id);
+   if(j&&j._sq!=null){
+    const m=document.querySelector('#infoModal .modal p');
+    if(m)m.insertAdjacentHTML('afterend','<p style="color:#ffd76a">🎈 Đang tích lũy: +'+j._sq+' Mult</p>');
+   }
+  }
+ }catch(e){}
+};
+
+/* ================= C. STAKE MỚI (khó hơn Vàng) ================= */
+try{
+ const raw=parseInt(localStorage.getItem('arcanumStakeV1'));
+ if(!isNaN(raw)&&raw>=0&&raw<=9)window._stakeIdx=raw;
+}catch(e){}
+const _ng29=newGame;
+newGame=function(k){
+ _ng29(k);
+ if(k&&S){
+  const idx=window._stakeIdx||0;
+  if(idx>=8){S.priceMult=(S.priceMult||1)*1.2;S.maxJokerSlots=Math.max(3,S.maxJokerSlots-1);}
+  if(idx>=9){S.baseHands=Math.max(1,S.baseHands-1);S.handsLeft=S.baseHands;}
+  render();
+ }
+};
+const _bsf29=blindScoreFor;
+blindScoreFor=function(a,i){
+ let v=_bsf29(a,i);
+ const idx=window._stakeIdx||0;
+ if(idx>=8)v=Math.round(v*1.15);
+ if(idx>=9)v=Math.round(v*1.2);
+ return v;
+};
+const _rds29=renderDeckSelect;
+renderDeckSelect=function(){
+ _rds29();
+ const row=document.querySelector('.stake-row');
+ if(row&&!row.dataset.v29){
+  row.dataset.v29='1';
+  const idx=window._stakeIdx||0;
+  [{i:8,icon:'🟣',name:'U Ám',desc:'Giá Shop +20% thêm, -1 khay Joker.'},
+   {i:9,icon:'💀',name:'Tận Thế',desc:'-1 lượt Chơi bài mỗi vòng, điểm mục tiêu tăng vọt.'}].forEach(e=>{
+   const b=document.createElement('button');
+   b.className='stake-btn'+(idx===e.i?' active':'');
+   b.title=e.name+': '+e.desc;b.textContent=e.icon;
+   b.onclick=()=>window.pickStake(e.i);
+   row.appendChild(b);
+  });
+ }
+ const desc=document.querySelector('.stake-desc');
+ const idx2=window._stakeIdx||0;
+ if(desc&&idx2>=8){
+  const map={8:['🟣 U Ám','Giá Shop +20% thêm, -1 khay Joker.'],9:['💀 Tận Thế','-1 lượt Chơi bài mỗi vòng, điểm mục tiêu tăng vọt.']};
+  const m=map[idx2];
+  if(m)desc.innerHTML='Độ khó: <b style="color:#ff6b6b">'+m[0]+'</b> — '+m[1]+' (Bao gồm mọi hiệu ứng của các Stake thấp hơn.)';
+ }
+};
+
+/* ================= D. 3 EDITION MỚI ================= */
+const _cc29=cardClass;
+cardClass=function(c){
+ let cls=_cc29(c);
+ if(c.edition==='prismatic')cls+=' ed-prismatic';
+ if(c.edition==='cursed')cls+=' ed-cursed';
+ if(c.edition==='radiant')cls+=' ed-radiant';
+ return cls;
+};
+const _eth29=editionTagHTML;
+editionTagHTML=function(c){
+ if(c.edition==='prismatic')return '<span class="edition-tag" style="background:linear-gradient(90deg,#ffd1e0,#c9d1ff,#c9f3ea);color:#333;">PRISM</span>';
+ if(c.edition==='cursed')return '<span class="edition-tag" style="background:#2a0a12;color:#ff6b8a;">CURSE</span>';
+ if(c.edition==='radiant')return '<span class="edition-tag" style="background:#fff3b0;color:#8a6a00;">RAD</span>';
+ return _eth29(c);
+};
+const _bssEd29=buildScoreSteps;
+buildScoreSteps=function(p){
+ const b=_bssEd29(p);
+ let dirty=false;
+ (b.scoring||[]).forEach(c=>{
+  if(c.edition==='prismatic'){
+   b.chips+=25;b.mult+=5;dirty=true;
+   b.steps.push({label:'🔷 Prismatic',chipDelta:25,multDelta:5,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:'+25 +5✦',floatColor:'#7fe3ff',delay:170});
+  } else if(c.edition==='cursed'){
+   const before=b.chips;b.chips=Math.max(0,b.chips-40);b.mult*=2;dirty=true;
+   b.steps.push({label:'💀 Cursed',chipDelta:b.chips-before,multDelta:0,multMulti:2,targetSel:`[data-cid="${c.id}"]`,floatText:'-40 x2✦',floatColor:'#ff4d6a',delay:170});
+  } else if(c.edition==='radiant'&&Math.random()<0.15){
+   let cc=rankChips(c.rank);if(c.enh==='bonus')cc+=30;if(c.enh==='stone')cc=50;if(c.enh==='wild')cc+=10;
+   b.chips+=cc;dirty=true;
+   b.steps.push({label:'🌟 Radiant — kích hoạt lại!',chipDelta:cc,multDelta:0,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:'+'+cc+' (x2!)',floatColor:'#fff3b0',delay:170});
+  }
+ });
+ if(dirty)b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));
+ return b;
+};
+const _rsc29e=randomStandardCard;
+randomStandardCard=function(){
+ const c=_rsc29e();
+ if(c.edition==='none'&&Math.random()<0.04)c.edition=pick(['prismatic','cursed','radiant']);
+ return c;
+};
+TAROTS.magicLens={name:'Lăng Kính Ma Thuật',icon:'🔮',cost:6,min:1,max:2,
+ desc:'Biến ≤2 lá thành Edition mới ngẫu nhiên: Prismatic (ổn định), Cursed (đổi Chip lấy x2 Mult), hoặc Radiant (hên xui kích hoạt lại).',
+ effect:(sel)=>{sel.forEach(c=>c.edition=pick(['prismatic','cursed','radiant']));return sel.length+' lá nhận Edition mới.';}};
+const cssEd29=document.createElement('style');
+cssEd29.textContent=`
+.card.ed-prismatic{background:linear-gradient(120deg,#ffd1e0,#c9d1ff,#c9f3ea,#ffd1e0)!important;background-size:300% 300%;animation:prismSweep29 3.2s linear infinite;border-color:#9fd6e8!important;}
+@keyframes prismSweep29{to{background-position:300% 0;}}
+.card.ed-cursed{background:linear-gradient(160deg,#2a0a12,#4a0f1c)!important;border-color:#ff3a5a!important;color:#ffb3c2!important;animation:cursedPulse29 1.6s ease-in-out infinite;}
+.card.ed-cursed .rank{color:#ffb3c2!important;}
+@keyframes cursedPulse29{0%,100%{box-shadow:0 3px 6px rgba(0,0,0,.4),0 0 8px rgba(255,58,90,.4);}50%{box-shadow:0 3px 6px rgba(0,0,0,.4),0 0 20px rgba(255,58,90,.9);}}
+.card.ed-radiant{background:linear-gradient(160deg,#fff9dd,#fff3b0)!important;border-color:#e0b93a!important;animation:radiantGlow29 2.4s ease-in-out infinite;}
+@keyframes radiantGlow29{0%,100%{box-shadow:0 3px 6px rgba(0,0,0,.35),0 0 6px rgba(255,230,120,.4);}50%{box-shadow:0 3px 6px rgba(0,0,0,.35),0 0 16px rgba(255,230,120,.85);}}
+`;
+document.head.appendChild(cssEd29);
+
+if(!S)renderDeckSelect();
+})();
+/* ===== ARCANUM v30: FIX LỖI STAKE BIẾN MÀN HÌNH + JOKER STONE/HOÀNG ĐẠO/CONSUMABLE-TRÊN-TAY + JOKER "DƯỚI ĐIỂM %" ===== */
+(function(){
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+
+/* ================= A. FIX LỖI STAKE (bấm 🟣/💀 làm mất cả màn hình) ================= */
+const STAKE_FULL=[
+ {icon:'⚪',name:'Trắng',desc:'Độ khó mặc định — chưa có gì thay đổi.'},
+ {icon:'🔴',name:'Đỏ',desc:'Small Blind không có tiền thưởng.'},
+ {icon:'🟢',name:'Lục',desc:'Điểm mục tiêu tăng nhanh hơn qua từng Ante.'},
+ {icon:'⚫',name:'Đen',desc:'-1 lượt Bỏ bài mỗi vòng.'},
+ {icon:'🔵',name:'Lam',desc:'-1 cỡ bài trên tay.'},
+ {icon:'🟣',name:'Tím',desc:'Điểm mục tiêu tăng mạnh hơn nữa qua từng Ante.'},
+ {icon:'🟠',name:'Cam',desc:'Giá cả trong Shop +50%.'},
+ {icon:'🟡',name:'Vàng',desc:'Boss Blind cực khó — điểm mục tiêu Boss nhân thêm x1.5.'},
+ {icon:'🟣',name:'U Ám',desc:'Giá Shop +20% thêm, -1 khay Joker.'},
+ {icon:'💀',name:'Tận Thế',desc:'-1 lượt Chơi bài mỗi vòng, điểm mục tiêu tăng vọt.'},
+];
+const _rdsFix30=renderDeckSelect;
+renderDeckSelect=function(){
+ try{_rdsFix30();}catch(e){console.error('renderDeckSelect lỗi, đang tự sửa:',e);}
+ const app=document.getElementById('app');if(!app)return;
+ if(!app.querySelector('h1'))app.innerHTML='<div class="center-screen"><h1>🂡 Chọn Bộ Bài</h1><div class="pack-grid"></div></div>';
+ let row=app.querySelector('.stake-row'),desc=app.querySelector('.stake-desc');
+ const idx=Math.max(0,Math.min(STAKE_FULL.length-1,window._stakeIdx||0));
+ window._stakeIdx=idx;
+ const rowHtml=`<div class="stake-row">${STAKE_FULL.map((s,i)=>`<button class="stake-btn ${i===idx?'active':''}" title="${s.name}: ${s.desc}" onclick="pickStake(${i})">${s.icon}</button>`).join('')}</div>`;
+ const descHtml=`<div class="stake-desc">Độ khó: <b style="color:${idx>=8?'#ff6b6b':'var(--gold)'}">${STAKE_FULL[idx].icon} ${STAKE_FULL[idx].name}</b> — ${STAKE_FULL[idx].desc}${idx>0?' (Bao gồm mọi hiệu ứng của các Stake thấp hơn.)':''}</div>`;
+ if(row)row.outerHTML=rowHtml;else{const h1=app.querySelector('h1');if(h1)h1.insertAdjacentHTML('afterend',rowHtml);}
+ desc=app.querySelector('.stake-desc');
+ if(desc)desc.outerHTML=descHtml;else{const r2=app.querySelector('.stake-row');if(r2)r2.insertAdjacentHTML('afterend',descHtml);}
+};
+
+/* ================= B. JOKER ĐÁ (STONE) ================= */
+JOKERS.stoneWarrior={key:'stoneWarrior',name:'Chiến Binh Đá',icon:'🗻',cost:5,rarity:'C',
+ desc:'[Sáng tạo] +40 Chip mỗi lá Stone được đánh ra.',
+ calc:c=>({chips:40*c.playedCards.filter(x=>x.enh==='stone').length})};
+JOKERS.stoneGolem={key:'stoneGolem',name:'Golem Đá',icon:'🪨',cost:7,rarity:'U',
+ desc:'[Sáng tạo] x1.2 Mult mỗi lá Stone đang GIỮ trên tay.',
+ calc:c=>{const n=c.heldCards.filter(x=>x.enh==='stone').length;return n?{xmult:Math.pow(1.2,n)}:{};}};
+JOKERS.stoneHeart={key:'stoneHeart',name:'Trái Tim Đá',icon:'💠',cost:6,rarity:'U',
+ desc:'[Sáng tạo] +15 Mult nếu đánh ra từ 2 lá Stone trở lên cùng lúc.',
+ calc:c=>c.playedCards.filter(x=>x.enh==='stone').length>=2?{mult:15}:{}};
+JOKERS.stoneQuarry={key:'stoneQuarry',name:'Mỏ Đá',icon:'⛏️',cost:6,rarity:'U',
+ desc:'[Sáng tạo] Thắng Blind: +$1 mỗi lá Stone trong bộ bài.',calc:()=>({})};
+const _wbStone30=winBlind;
+winBlind=function(){const add=has('stoneQuarry')?S.fullDeck.filter(x=>x.enh==='stone').length:0;_wbStone30();if(add){S.money+=add;render();}};
+
+/* ================= C. JOKER HOÀNG ĐẠO ================= */
+JOKERS.zodiacBinder={key:'zodiacBinder',name:'Người Kết Nối Sao',icon:'🔭',cost:6,rarity:'U',
+ desc:'[Sáng tạo] +10 Chip mỗi cung Hoàng Đạo đang giữ.',
+ calc:c=>({chips:10*((c.state.zodiacs||[]).length)})};
+JOKERS.zodiacAmplifier={key:'zodiacAmplifier',name:'Khuếch Đại Chiêm Tinh',icon:'✨',cost:7,rarity:'U',
+ desc:'[Sáng tạo] x1.18 Mult mỗi cung Hoàng Đạo đang giữ.',
+ calc:c=>{const n=(c.state.zodiacs||[]).length;return n?{xmult:Math.pow(1.18,n)}:{};}};
+JOKERS.zodiacEcho={key:'zodiacEcho',name:'Vọng Sao',icon:'🌌',cost:8,rarity:'R',
+ desc:'[Sáng tạo] Mỗi khi dùng 1 cung Hoàng Đạo: 20% cơ hội KHÔNG bị tiêu hao (giữ lại cung đó).',
+ calc:()=>({})};
+if(typeof window.useZodiac==='function'){
+ const _uzZod30=window.useZodiac;
+ window.useZodiac=function(u){
+  const keep=has('zodiacEcho')&&Math.random()<0.2;
+  const snap=keep?(S.zodiacs||[]).find(z=>z.uid===u):null;
+  const snapCopy=snap?{...snap}:null;
+  _uzZod30(u);
+  if(snapCopy&&!S.zodiacs.some(z=>z.uid===snapCopy.uid)){
+   S.zodiacs.push({uid:uid(),key:snapCopy.key});
+   S.message=(S.message||'')+' 🌌 Vọng Sao: không bị tiêu hao!';render();
+  }
+ };
+}
+
+/* ================= D. JOKER THEO TAROT/PLANET ĐANG GIỮ TRÊN TAY (khay Consumable) ================= */
+JOKERS.arcaneVessel={key:'arcaneVessel',name:'Bình Chứa Bí Thuật',icon:'🏺',cost:6,rarity:'U',
+ desc:'[Sáng tạo] +6 Mult mỗi lá Tarot/Planet đang có trong khay Consumable.',
+ calc:c=>({mult:6*(c.state.consumables||[]).length})};
+JOKERS.planetHolder={key:'planetHolder',name:'Người Giữ Hành Tinh',icon:'🪐',cost:6,rarity:'U',
+ desc:'[Sáng tạo] +25 Chip mỗi lá Planet đang giữ trong khay.',
+ calc:c=>({chips:25*(c.state.consumables||[]).filter(x=>x.type==='planet').length})};
+JOKERS.tarotKeeper={key:'tarotKeeper',name:'Người Giữ Tarot',icon:'🎴',cost:6,rarity:'U',
+ desc:'[Sáng tạo] +8 Mult mỗi lá Tarot đang giữ trong khay.',
+ calc:c=>({mult:8*(c.state.consumables||[]).filter(x=>x.type==='tarot').length})};
+JOKERS.fullVessel={key:'fullVessel',name:'Kho Đầy Ắp',icon:'📦',cost:7,rarity:'U',
+ desc:'[Sáng tạo] x2 Mult nếu khay Tarot/Planet đang đầy chỗ.',
+ calc:c=>({xmult:(c.state.consumables||[]).length>=c.state.maxConsumableSlots?2:1})};
+
+/* ================= E. JOKER "DƯỚI ĐIỂM %" — buff theo % điểm còn thiếu so với mục tiêu ================= */
+function deficitPct(st){return Math.max(0,Math.min(1,(st.blindScore-st.currentScore)/Math.max(1,st.blindScore)));}
+JOKERS.underdog={key:'underdog',name:'Chó Yếu Thế',icon:'🐕‍🦺',cost:6,rarity:'U',
+ desc:'[Sáng tạo] +Mult = 35 × (% điểm còn thiếu so với mục tiêu). Càng thiếu nhiều điểm, càng mạnh.',
+ calc:c=>({mult:Math.round(35*deficitPct(c.state))})};
+JOKERS.comebackKid={key:'comebackKid',name:'Kẻ Lội Ngược Dòng',icon:'🌪️',cost:8,rarity:'R',
+ desc:'[Sáng tạo] x(1 + % điểm còn thiếu) Mult. Thiếu 50% mục tiêu = x1.5, thiếu 90% = x1.9.',
+ calc:c=>({xmult:1+deficitPct(c.state)})};
+JOKERS.desperateHour={key:'desperateHour',name:'Giờ Phút Tuyệt Vọng',icon:'⏰',cost:7,rarity:'U',
+ desc:'[Sáng tạo] Còn ≤2 lượt Chơi bài: +Chip = 300 × % điểm còn thiếu.',
+ calc:c=>c.state.handsLeft<=2?{chips:Math.round(300*deficitPct(c.state))}:{}};
+JOKERS.lastStandPct={key:'lastStandPct',name:'Trận Cuối Sinh Tử',icon:'🛡️',cost:9,rarity:'R',
+ desc:'[Sáng tạo] Lượt Chơi bài CUỐI CÙNG: +Mult = 60 × % điểm còn thiếu (có thể lật kèo phút chót).',
+ calc:c=>c.state.handsLeft===1?{mult:Math.round(60*deficitPct(c.state))}:{}};
+
+if(!S)renderDeckSelect();
+})();
+/* ===== ARCANUM v31: KHÓA STAKE THEO TIẾN ĐỘ + MƯỢT HÓA KÉO/CUỘN HÀNG JOKER ===== */
+(function(){
+const say=(t,c)=>{const e=document.createElement('div');e.className='callout';e.style.fontSize='1.3rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1700);};
+
+/* ================= A. KHÓA STAKE THEO TIẾN ĐỘ ================= */
+const SU_LS='arcanumStakeUnlockV1';
+function loadSU(){try{return Math.max(0,Math.min(9,parseInt(localStorage.getItem(SU_LS))||0));}catch(e){return 0;}}
+function saveSU(v){try{localStorage.setItem(SU_LS,String(v));}catch(e){}}
+window._stakeUnlocked=loadSU();
+
+// Không cho chọn Stake chưa mở khóa
+const _pickStake31=window.pickStake;
+window.pickStake=function(i){
+ if(i>window._stakeUnlocked){say('🔒 Cần thắng ở mức Stake trước để mở mức này!','#ffb3ab');return;}
+ _pickStake31(i);
+};
+
+// Ghi lại Stake của ván đang chơi, và mở khóa Stake kế tiếp khi thắng (qua Ante 8)
+const _ngSU31=newGame;
+newGame=function(k){
+ _ngSU31(k);
+ if(k&&S)S.playedStakeIdx=window._stakeIdx||0;
+};
+const _rSU31=render;
+render=function(){
+ _rSU31();
+ try{
+  if(S&&S.phase==='win'&&!S.stakeUnlockChecked){
+   S.stakeUnlockChecked=true;
+   const used=S.playedStakeIdx!=null?S.playedStakeIdx:(window._stakeIdx||0);
+   if(used>=window._stakeUnlocked&&window._stakeUnlocked<9){
+    window._stakeUnlocked=used+1;saveSU(window._stakeUnlocked);
+    say('🔓 Mở khóa Stake tiếp theo!','#ffd76a');
+   }
+  }
+ }catch(e){console.error(e);}
+};
+
+// Vẽ lại thanh Stake: khóa các mức chưa mở, hiện 🔒 và không cho bấm
+const _rdsSU31=renderDeckSelect;
+renderDeckSelect=function(){
+ _rdsSU31();
+ try{
+  const row=document.querySelector('.stake-row');if(!row)return;
+  const btns=[...row.querySelectorAll('.stake-btn')];
+  const names=['Trắng','Đỏ','Lục','Đen','Lam','Tím','Cam','Vàng','U Ám','Tận Thế'];
+  btns.forEach((b,i)=>{
+   if(i>window._stakeUnlocked){
+    b.classList.add('stake-locked');
+    b.textContent='🔒';
+    b.title='Bị khóa — cần thắng (qua Ante 8) ở Stake '+names[i-1]+' để mở.';
+   }
+  });
+  let note=document.querySelector('.stake-progress-note');
+  if(!note){
+   note=document.createElement('div');note.className='stake-progress-note';
+   const desc=document.querySelector('.stake-desc');
+   if(desc)desc.insertAdjacentElement('afterend',note);
+  }
+  note.textContent=`🏅 Đã mở khóa tới: ${names[window._stakeUnlocked]} (${window._stakeUnlocked}/9). Thắng 1 ván (qua Ante 8) ở Stake cao nhất đang mở để mở khóa Stake kế tiếp.`;
+ }catch(e){console.error(e);}
+};
+
+/* ================= B. MƯỢT HÓA KÉO/CUỘN HÀNG JOKER ================= */
+// Thay touch-action:none (chặn cuộn) bằng pan-x (cho vuốt cuộn tự nhiên), chỉ chiếm quyền kéo khi giữ đủ lâu
+const css31=document.createElement('style');
+css31.textContent=`
+.card-row{scroll-behavior:smooth;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scroll-snap-type:x proximity;will-change:scroll-position;}
+.card-row .joker-card,.card-row .consumable-card{scroll-snap-align:start;touch-action:pan-x!important;}
+.own-chip[data-juid]{touch-action:pan-x!important;}
+.card-row.row-scrolling .joker-card{animation-play-state:paused!important;}
+.card-row.row-scrolling .joker-card::after{animation-play-state:paused!important;}
+.card-row{cursor:grab;}
+.card-row.row-panning{cursor:grabbing;scroll-behavior:auto;}
+`;
+document.head.appendChild(css31);
+
+// Chỉ cho phép kéo-đổi-thứ-tự khi giữ ổn định >180ms rồi mới di chuyển; vuốt nhanh = cuộn bình thường
+const _pdOrig31=null; // (không sửa lại pointerdown gốc — chỉ thêm lớp chặn "khởi động sớm" bên dưới)
+let holdTimer=null,holdReady=false,holdStart=null;
+document.addEventListener('pointerdown',e=>{
+ holdReady=false;holdStart={x:e.clientX,y:e.clientY,t:performance.now()};
+ clearTimeout(holdTimer);
+ const el=e.target.closest&&e.target.closest('.joker-card[data-juid],.own-chip[data-juid]');
+ if(el)holdTimer=setTimeout(()=>{holdReady=true;},170);
+},true);
+document.addEventListener('pointerup',()=>{clearTimeout(holdTimer);holdReady=false;},true);
+document.addEventListener('pointercancel',()=>{clearTimeout(holdTimer);holdReady=false;},true);
+// Nếu người dùng di chuyển ngón tay đủ xa TRƯỚC khi holdReady => đó là thao tác cuộn, không phải kéo sắp xếp
+document.addEventListener('pointermove',e=>{
+ if(!holdStart||holdReady)return;
+ const dx=Math.abs(e.clientX-holdStart.x),dy=Math.abs(e.clientY-holdStart.y);
+ if(dx>10||dy>10){clearTimeout(holdTimer);holdStart=null;} // hủy ý định kéo-sắp-xếp, để trình duyệt tự cuộn
+},true);
+
+// Cuộn bằng chuột kéo ngang (desktop) + bánh xe cuộn ngang cho mọi .card-row
+document.querySelectorAll('.card-row').forEach(bindRowScroll);
+function bindRowScroll(row){
+ if(row._boundV31)return;row._boundV31=true;
+ let sT;
+ row.addEventListener('scroll',()=>{row.classList.add('row-scrolling');clearTimeout(sT);sT=setTimeout(()=>row.classList.remove('row-scrolling'),220);},{passive:true});
+ row.addEventListener('wheel',e=>{
+  if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){row.scrollLeft+=e.deltaY;e.preventDefault();}
+ },{passive:false});
+ let down=false,sx=0,sl=0;
+ row.addEventListener('mousedown',e=>{if(e.target.closest('.joker-card,.consumable-card,.own-chip'))return;down=true;row.classList.add('row-panning');sx=e.pageX;sl=row.scrollLeft;});
+ window.addEventListener('mousemove',e=>{if(!down)return;row.scrollLeft=sl-(e.pageX-sx);});
+ window.addEventListener('mouseup',()=>{down=false;row.classList.remove('row-panning');});
+}
+const _rRow31=render;
+render=function(){
+ _rRow31();
+ try{document.querySelectorAll('.card-row').forEach(bindRowScroll);}catch(e){}
+};
+})();
 </script>
 
 </body>
