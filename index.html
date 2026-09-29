@@ -800,7 +800,7 @@ function buildScoreSteps(playedCards){
     if(moneyGain)ft+=` +$${moneyGain}`;
     steps.push({label:`${rankLabel(c.rank)}${SUITS[c.suit].sym}`,chipDelta:cc,multDelta:mDelta,multMulti:mMulti,targetSel:`[data-cid="${c.id}"]`,floatText:ft,floatColor:(mDelta||mMulti!==1)?'#ff6b6b':'#5eb3f0',delay:150});
     // Glass might break
-    if(c.enh==='glass'&&Math.random()<0.25){S.glassJokerCount=(S.glassJokerCount||0)+1;c.enh='none';}
+if(c.enh==='glass'&&Math.random()<0.25){S.glassJokerCount=(S.glassJokerCount||0)+1;S.fullDeck=S.fullDeck.filter(x=>x.id!==c.id);if(c.rank>=11&&c.rank<=13&&S.jokers.some(j=>j.key==='soulJoker'))S.canioMult=(S.canioMult||0)+1;}
     // Wee joker
     if(c.rank===2){S.weeJokerChips=(S.weeJokerChips||0)+8;}
   });
@@ -1069,7 +1069,7 @@ function buyJoker(idx){
   if(def.key==='blackHole'){Object.keys(S.handLevels).forEach(k=>{S.handLevels[k]+=1;});}
   if(def.passive==='cartomancer'){addConsumable(randKey(TAROTS));}
   if(def.passive==='riffraff'){const commons=Object.keys(JOKERS).filter(k=>JOKERS[k].rarity==='C');for(let i=0;i<2;i++){if(activeJokerCount()>=S.maxJokerSlots)break;S.jokers.push({uid:uid(),key:commons[Math.floor(Math.random()*commons.length)],edition:'none'});}}
-  if(def.passive==='certificate'){S.hand.push(randomStandardCard());}
+ if(def.passive==='certificate'){const cc=randomStandardCard();if(cc.seal==='none')cc.seal=['red','blue','gold','purple'][Math.floor(Math.random()*4)];S.fullDeck.push(cc);}
   S.shopOffers.jokers[idx]=null;render();
 }
 function buyVoucher(){
@@ -2182,7 +2182,7 @@ buyPack=function(idx){
  if(offer&&PACKS[offer.key].kind==='planet'&&S.jokers.some(j=>j.key==='astronomer')){S.shopOffers.packs[idx]=null;openPack('planet');return;}
  _bpAst(idx);
 };
-function creditWrap(fn){return function(){if(S.jokers.some(j=>j.key==='creditCard')){S.money+=9999;fn.apply(null,arguments);S.money-=9999;if(S.money<-20)S.money=-20;}else fn.apply(null,arguments);};}
+function creditWrap(fn){return function(){if(S.jokers.some(j=>j.key==='creditCard')){S.money+=20;fn.apply(null,arguments);S.money-=20;}else fn.apply(null,arguments);};}
 buyJoker=creditWrap(buyJoker);buyConsumable=creditWrap(buyConsumable);buyPack=creditWrap(buyPack);buyVoucher=creditWrap(buyVoucher);rerollShop=creditWrap(rerollShop);
 
 // ---- Hook: dùng Planet Black Hole (nâng cấp TẤT CẢ bài) ----
@@ -3332,12 +3332,14 @@ function santaGift(){
 const _wb=winBlind;
 winBlind=function(){
  const santa=has('santa'),dark=has('bongdem');
- _wb();
  if(dark){
   S.fullDeck.push({id:uid(),rank:RANK_ORDER[Math.floor(Math.random()*RANK_ORDER.length)],suit:pick(['C','S']),enh:'none',edition:'none',seal:'none',dark:true});
   say('🌑 Thêm 1 lá Bóng Đêm vào bộ bài','#c9a0ff');
  }
- if(santa)santaGift();
+ try{ _wb(); }
+ finally{
+  if(santa){ try{ santaGift(); render(); }catch(e){ console.error(e); } }
+ }
 };
 
 /* ---------- 3. CỬA HÀNG XU (TRANG CHỦ) ---------- */
@@ -6255,7 +6257,6 @@ buildScoreSteps=function(played){
   if(!eff.length)return b;
   const face=c=>c.rank>=11&&c.rank<=13;
 
-  if(has('sockBuskin'))eff.forEach(c=>{if(face(c))pushRT40(b,c,'🎪',null);});
   if(has('hack'))eff.forEach(c=>{if(c.rank>=2&&c.rank<=5)pushRT40(b,c,'💻',null);});
   if(has('dusk')&&S.handsLeft===1)eff.forEach(c=>pushRT40(b,c,'🌇',null));
   if(has('seltzer')){
@@ -6681,6 +6682,160 @@ window.showInfo=function(kind,id){
 };
 
 if(S)render();
+})();
+/* ===== ARCANUM v43: VÁ LỖI ===== */
+(function(){
+const SU=['S','H','D','C'];
+const newC=(r,s)=>({id:uid(),rank:r,suit:s,enh:'none',edition:'none',seal:'none'});
+function killFromHand(st){
+ if(!st.hand.length)return null;
+ const v=st.hand.splice(Math.floor(Math.random()*st.hand.length),1)[0];
+ st.fullDeck=st.fullDeck.filter(x=>x.id!==v.id);st.deck=st.deck.filter(x=>x.id!==v.id);return v;
+}
+// 1. Familiar / Grim phá lá VĨNH VIỄN (trước chỉ xoá khỏi tay)
+SPECTRALS.familiar.effect=(s,st)=>{if(!killFromHand(st))return'Không có lá.';for(let i=0;i<3;i++)st.fullDeck.push(newC([11,12,13][Math.floor(Math.random()*3)],SU[Math.floor(Math.random()*4)]));return'Phá 1 lá, thêm 3 lá mặt.';};
+SPECTRALS.grim.effect=(s,st)=>{if(!killFromHand(st))return'Không có lá.';for(let i=0;i<2;i++)st.fullDeck.push(newC(14,SU[Math.floor(Math.random()*4)]));return'Phá 1 lá, thêm 2 Ách.';};
+
+// 2. The Plant không còn "dính" sang các Blind sau
+const _sbP=setupBlind;
+setupBlind=function(){ if(S)S.plantDebuff=false; _sbP(); };
+
+// 3. Lá Wild đứng đầu làm hỏng nhận diện Thùng
+const _evW=evaluateHand;
+evaluateHand=function(cs){
+ const wilds=cs.filter(c=>c.enh==='wild');
+ if(!wilds.length||wilds.length===cs.length)return _evW(cs);
+ const cnt={};cs.forEach(c=>{if(c.enh!=='wild')cnt[c.suit]=(cnt[c.suit]||0)+1;});
+ const best=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];
+ const old=wilds.map(c=>c.suit);wilds.forEach(c=>c.suit=best);
+ try{return _evW(cs);}finally{wilds.forEach((c,i)=>c.suit=old[i]);}
+};
+
+// 4. Hologram trước đây KHÔNG BAO GIỜ tăng
+JOKERS.hologram.calc=c=>{const s=c.state;if(s.holoBase==null)s.holoBase=s.fullDeck.length;return{xmult:1+0.25*Math.max(0,s.fullDeck.length-s.holoBase)};};
+
+// 5. Juggler: bán đi thì mất +1 cỡ bài
+const _sjJ=sellJoker;
+sellJoker=function(u){
+ const j=S.jokers.find(x=>x.uid===u),isJ=j&&j.key==='juggler';
+ _sjJ(u);
+ if(isJ&&!S.jokers.some(x=>x.uid===u)){S.baseHandSize=Math.max(4,S.baseHandSize-1);S.handSize=Math.max(4,S.handSize-1);render();}
+};
+
+// 6. Throwback: skipCount chỉ tăng qua Speed Tag nên joker này không bao giờ mạnh lên
+const _skTB=skipBlind;
+skipBlind=function(){ if(S&&S.blindIdx!==2)S.skipTotal=(S.skipTotal||0)+1; _skTB(); };
+JOKERS.throwback.calc=c=>({xmult:1+0.25*(c.state.skipTotal||0)});
+
+// 7. Voucher Observatory trước đây vô dụng: mỗi Planet trong khay khớp loại bài = x1.5 Mult
+VOUCHERS.observatory.desc='Mỗi Planet trong khay khớp loại bài đang chơi: x1.5 Mult (Planet không bị tiêu hao).';
+const _bssObs=buildScoreSteps;
+buildScoreSteps=function(p){
+ const b=_bssObs(p);
+ if(S&&S.observatoryMode){
+  const n=S.consumables.filter(c=>c.type==='planet'&&PLANETS[c.key]&&PLANETS[c.key].hand===b.type).length;
+  if(n){const m=Math.pow(1.5,n);b.mult*=m;b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));
+   b.steps.push({label:'🔭 Observatory',chipDelta:0,multDelta:0,multMulti:m,floatText:'x'+m.toFixed(2)+'✦',floatColor:'#7fe3ff',delay:220});}
+ }
+ return b;
+};
+
+// 8. Mảnh Gương gọi calc của joker khác nên vô tình kích hoạt cả hiệu ứng tiền/tarot của chúng
+JOKERS.mirrorShard.calc=c=>{
+ const m0=c.state.money,n0=c.state.consumables.length;let best=0;
+ c.state.jokers.forEach(j=>{if(j.uid===c.self.uid)return;const def=JOKERS[j.key];if(!def)return;const r=def.calc({...c,self:j})||{};if(r.mult&&r.mult>best)best=r.mult;});
+ c.state.money=m0;c.state.consumables.length=n0;
+ return{mult:best};
+};
+})();
+/* ===== ARCANUM v43b: CODE Dio = MỞ TẤT CẢ STAKE ===== */
+(function(){
+ const _ac=window.applyCode;
+ window.applyCode=function(){
+  const inp=document.getElementById('cheatCode');
+  const v=((inp&&inp.value)||'').trim();
+  if(v==='Dio'){
+   window._stakeUnlocked=9;
+   try{localStorage.setItem('arcanumStakeUnlockV1','9');}catch(e){}
+   toastDeck('🔓 DIO! Đã mở khóa TẤT CẢ mức Stake!');
+   if(inp)inp.value='';
+   renderDeckSelect();
+   return;
+  }
+  _ac();
+ };
+})();
+/* ===== ARCANUM v45: TAB DỊCH VỤ TRONG SHOP ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const say=(t,c)=>{const e=document.createElement('div');e.className='callout';e.style.fontSize='1.3rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1700);};
+const none=x=>!x||x==='none';
+const nm=c=>rankLabel(c.rank)+SUITS[c.suit].sym;
+
+const SVC={
+ forge:{icon:'🔨',name:'Lò Rèn Lá',base:6,step:2,fail:'Mọi lá đều đã có Enhancement.',
+  desc:'Gắn 1 Enhancement ngẫu nhiên (Bonus/Mult/Glass/Steel/Gold/Lucky/Wild) cho 1 lá chưa có.',
+  run:s=>{const p=s.fullDeck.filter(c=>none(c.enh));if(!p.length)return null;const c=pick(p);c.enh=pick(['bonus','mult','glass','steel','gold','lucky','wild']);return nm(c)+' → '+c.enh;}},
+ seal:{icon:'🔖',name:'Xưởng Con Dấu',base:8,step:3,fail:'Mọi lá đều đã có Seal.',
+  desc:'Gắn 1 Seal ngẫu nhiên (Đỏ/Vàng/Lam/Tím/Cam/Trắng) cho 1 lá chưa có.',
+  run:s=>{const p=s.fullDeck.filter(c=>none(c.seal));if(!p.length)return null;const c=pick(p);c.seal=pick(['red','gold','blue','purple','orange','white']);return nm(c)+' nhận Seal '+c.seal;}},
+ edition:{icon:'✨',name:'Tiệm Phủ Sáng',base:9,step:3,fail:'Mọi lá đều đã có Edition.',
+  desc:'Thêm Foil / Holographic / Polychrome cho 1 lá chưa có Edition.',
+  run:s=>{const p=s.fullDeck.filter(c=>none(c.edition));if(!p.length)return null;const c=pick(p);c.edition=pick(['foil','holo','poly']);return nm(c)+' → '+c.edition;}},
+ trim:{icon:'✂️',name:'Thợ Tỉa Bộ Bài',base:4,step:1,fail:'Không còn lá yếu (bậc ≤6, trơn) hoặc bộ bài ≤24 lá.',
+  desc:'Loại bỏ vĩnh viễn 1 lá yếu (bậc ≤6, không Enhancement/Seal/Edition). Bộ bài phải >24 lá.',
+  run:s=>{if(s.fullDeck.length<=24)return null;const p=s.fullDeck.filter(c=>c.rank<=6&&none(c.enh)&&none(c.seal)&&none(c.edition));if(!p.length)return null;const c=pick(p);s.fullDeck=s.fullDeck.filter(x=>x.id!==c.id);return 'Đã tiêu huỷ '+nm(c);}},
+ clone:{icon:'📠',name:'Máy Nhân Bản',base:10,step:4,fail:'Chưa có lá đặc biệt nào để nhân bản (hoặc bộ bài ≥90 lá).',
+  desc:'Nhân bản 1 lá có Enhancement/Seal/Edition trong bộ bài.',
+  run:s=>{if(s.fullDeck.length>=90)return null;const p=s.fullDeck.filter(c=>!none(c.enh)||!none(c.seal)||!none(c.edition));if(!p.length)return null;const c=pick(p);s.fullDeck.push({...c,id:uid()});return 'Nhân bản '+nm(c);}},
+ level:{icon:'📈',name:'Viện Nghiên Cứu Bài',base:8,step:3,fail:'Loại bài này đã đạt cấp tối đa (15).',
+  desc:'Nâng 1 loại bài BẠN CHỌN lên +1 cấp.',
+  run:s=>{const k=window._svcHand||'Pair';if(!HAND_TYPES[k]||k==='ALL')return null;if((s.handLevels[k]||1)>=15)return null;s.handLevels[k]=(s.handLevels[k]||1)+1;return HAND_TYPES[k].name+' → cấp '+s.handLevels[k];}},
+ tea:{icon:'🍵',name:'Trà Thảo Mộc',base:5,step:2,fail:'',
+  desc:'+2 lượt Bỏ bài cho Blind kế tiếp (không áp dụng nếu gặp Boss The Water, sẽ để dành).',
+  run:s=>{s.nextDiscardBonus=(s.nextDiscardBonus||0)+2;return '+2 lượt Bỏ bài cho Blind kế tiếp';}},
+};
+const price=k=>{const d=SVC[k];const n=((S.svcBought||{})[k])||0;return Math.max(1,Math.round((d.base+d.step*n)*(S.priceMult||1)));};
+
+window.buySvc=function(k){
+ if(!S||S.phase!=='shop'||!SVC[k])return;
+ const cost=price(k);
+ if(!S.shopAllFree&&S.money<cost)return;
+ const msg=SVC[k].run(S);
+ if(!msg){say('⚠️ '+SVC[k].fail,'#ffb3ab');return;}
+ if(!S.shopAllFree)S.money-=cost;
+ S.svcBought=S.svcBought||{};S.svcBought[k]=(S.svcBought[k]||0)+1;
+ say('✅ '+msg,'#7fd18b');render();
+};
+
+// Trà thảo mộc: cộng Discard khi vào Blind kế tiếp
+const _sb=setupBlind;
+setupBlind=function(){
+ _sb();
+ if(S&&S.nextDiscardBonus){
+  const water=S.boss&&String(S.boss.key).replace('_off_','')==='water'&&!S.jokers.some(j=>j.key==='chicot');
+  if(!water){S.discardsLeft+=S.nextDiscardBonus;S.nextDiscardBonus=0;}
+ }
+};
+
+function html(){
+ const opts=Object.keys(HAND_TYPES).filter(k=>k!=='ALL').map(k=>`<option value="${k}" ${(window._svcHand||'Pair')===k?'selected':''}>${HAND_TYPES[k].name} (Cấp ${S.handLevels[k]||1})</option>`).join('');
+ return '<div class="shop-grid">'+Object.entries(SVC).map(([k,d])=>{
+  const cost=price(k);
+  const sel=k==='level'?`<select onchange="window._svcHand=this.value" style="max-width:100%;padding:4px;border-radius:6px;background:#0b281d;color:var(--text-hi);border:1px solid var(--panel-edge);font-size:.7rem;">${opts}</select>`:'';
+  return `<div class="shop-item"><div class="icon">${d.icon}</div><div class="nm">${d.name}</div><div class="dsc">${d.desc}</div>${sel}<div class="price">${S.shopAllFree?'MIỄN PHÍ':'$'+cost}</div><button class="btn small" onclick="buySvc('${k}')" ${(!S.shopAllFree&&S.money<cost)?'disabled':''}>Mua</button></div>`;
+ }).join('')+'</div>';
+}
+function inject(){
+ const bar=document.querySelector('.shop-tabs'),holder=bar&&bar.nextElementSibling;
+ if(!bar||!holder||bar.querySelector('[data-t="u"]'))return;
+ const btn=document.createElement('button');btn.className='shop-tab';btn.dataset.t='u';btn.textContent='🛠️ Dịch vụ';btn.onclick=()=>shopTab('u');bar.appendChild(btn);
+ const sec=document.createElement('div');sec.className='shop-sec';sec.dataset.t='u';sec.innerHTML=html();holder.appendChild(sec);
+ shopTab(window._shopTab||'j');
+}
+const _r=render;
+render=function(){_r();try{if(S&&S.phase==='shop')inject();}catch(e){console.error(e);}};
+if(S&&S.phase==='shop')render();
 })();
 </script>
 
