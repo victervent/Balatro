@@ -6181,6 +6181,185 @@ rerollShop=function(){
  if(S.shopOffers&&S.shopOffers.jokers!==before){applyFinal39();render();}
 };
 })();
+/* ===== ARCANUM v40: RETRIGGER JOKER + FIX BOSS THE PLANT + CƠ CHẾ GIẢM TỈ LỆ THEO ĐỘ QUEN MẶT ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.3rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1500);}
+
+/* ================= A. NÂNG CẤP 3 LÁ CŨ THÀNH RETRIGGER THẬT ================= */
+if(JOKERS.sockBuskin){Object.assign(JOKERS.sockBuskin,{
+ desc:'Mỗi lá mặt (J, Q, K) được tính điểm sẽ KÍCH HOẠT LẠI 1 lần nữa (retrigger thật, tính đủ Enhancement/Edition/Seal).',
+ calc:()=>({})});}
+if(JOKERS.hack){Object.assign(JOKERS.hack,{
+ desc:'Mỗi lá bậc 2, 3, 4, 5 được tính điểm sẽ KÍCH HOẠT LẠI 1 lần nữa (retrigger thật).',
+ calc:()=>({})});}
+if(JOKERS.seltzer){Object.assign(JOKERS.seltzer,{
+ desc:'Mọi lá được tính điểm sẽ KÍCH HOẠT LẠI 1 lần nữa. Dùng hết trong 10 lượt Chơi bài rồi biến mất.',
+ calc:()=>({})});}
+if(JOKERS.dusk){Object.assign(JOKERS.dusk,{
+ desc:'Ở lượt Chơi bài CUỐI CÙNG của Blind: mọi lá được tính điểm sẽ KÍCH HOẠT LẠI 1 lần nữa (retrigger thật).',
+ calc:()=>({})});}
+
+/* ================= B. 10 LÁ RETRIGGER MỚI ================= */
+const RT40={
+ echoTwin40:{name:'Vọng Âm Song Sinh',icon:'👯‍♀️',cost:7,rarity:'U',desc:'  2 lá NGẪU NHIÊN trong số lá được tính điểm sẽ kích hoạt lại.',calc:()=>({})},
+ tripleEcho40:{name:'Ba Lần Vang',icon:'🔔',cost:6,rarity:'U',desc:'  Mỗi lá ở vị trí thứ 3, 6, 9... (chia hết cho 3) trong số lá được tính điểm: kích hoạt lại.',calc:()=>({})},
+ shatterMirror40:{name:'Gương Vỡ',icon:'🪞',cost:6,rarity:'U',desc:' Lá có BẬC NHỎ NHẤT trong số lá được tính điểm: kích hoạt lại.',calc:()=>({})},
+ brightMirror40:{name:'Gương Sáng',icon:'🔆',cost:6,rarity:'U',desc:'  Lá có BẬC LỚN NHẤT trong số lá được tính điểm: kích hoạt lại.',calc:()=>({})},
+ luckyEcho40:{name:'Tiếng Vọng Chất May Mắn',icon:'🍀',cost:7,rarity:'U',desc:'  Mỗi lá thuộc CHẤT MAY MẮN của ván (đổi mỗi Blind) được tính điểm: kích hoạt lại.',calc:()=>({})},
+ sealCaller40:{name:'Người Gọi Hồn',icon:'👻',cost:7,rarity:'U',desc:'  Mỗi lá có Seal (bất kỳ loại) được tính điểm: kích hoạt lại.',calc:()=>({})},
+ enhEcho40:{name:'Đồng Vọng Cường Hóa',icon:'⚗️',cost:7,rarity:'U',desc:'  Mỗi lá có Enhancement (bất kỳ loại) được tính điểm: kích hoạt lại.',calc:()=>({})},
+ symEcho40:{name:'Vọng Âm Đối Xứng',icon:'🦋',cost:8,rarity:'R',desc:'  Lá ĐẦU và lá CUỐI trong số lá được tính điểm: mỗi lá kích hoạt lại 1 lần.',calc:()=>({})},
+ stubbornEcho40:{name:'Kẻ Lặp Lại Kiên Định',icon:'🔁',cost:9,rarity:'R',desc:'  Nếu loại bài vừa đánh GIỐNG loại bài lượt trước: mọi lá kích hoạt lại 1 lần.',calc:()=>({})},
+ infiniteEcho40:{name:'Vòng Lặp Vô Tận',icon:'♾️',cost:15,rarity:'L',desc:'  Mọi lá được tính điểm sẽ kích hoạt lại HAI lần nữa (tổng x3 lần tính).',calc:()=>({})},
+};
+Object.entries(RT40).forEach(([k,d])=>{d.key=k;JOKERS[k]=d;});
+
+/* ================= C. HÀM TÍNH ĐÓNG GÓP 1 LÁ (dùng chung cho mọi retrigger) ================= */
+function cardContribution40(c){
+ let cc=rankChips(c.rank);
+ if(c.enh==='bonus')cc+=30;
+ if(c.enh==='stone')cc=50;
+ if(c.enh==='wild')cc+=10;
+ if(c.edition==='foil')cc+=50;
+ let mDelta=0,mMulti=1,luckyHit=false;
+ if(c.enh==='mult')mDelta+=4;
+ if(c.edition==='holo')mDelta+=10;
+ if(c.enh==='glass')mMulti*=2;
+ if(c.edition==='poly')mMulti*=1.5;
+ if(c.enh==='lucky'&&Math.random()<0.2){mDelta+=20;luckyHit=true;}
+ if(c.enh==='lucky'&&Math.random()<0.07)S.money+=20;
+ if(c.seal==='gold')S.money+=3;
+ if(c.seal==='red')mMulti*=1.5;
+ return{cc,mDelta,mMulti,luckyHit};
+}
+function pushRT40(b,c,tag,color){
+ const{cc,mDelta,mMulti,luckyHit}=cardContribution40(c);
+ b.chips+=cc;b.mult+=mDelta;b.mult*=mMulti;
+ b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));
+ let ft='';
+ if(cc)ft+=`+${cc}`;
+ if(mDelta)ft+=(ft?' ':'')+`+${mDelta}✦`;
+ if(mMulti!==1)ft+=(ft?' ':'')+`x${mMulti.toFixed(1)}✦`;
+ if(luckyHit)ft+=' 🍀';
+ b.steps.push({label:`${tag} ${rankLabel(c.rank)}${SUITS[c.suit].sym}`,chipDelta:cc,multDelta:mDelta,multMulti:mMulti,targetSel:`[data-cid="${c.id}"]`,floatText:ft||'♪',floatColor:color||'#ffd76a',delay:170});
+}
+
+/* ================= D. ÁP DỤNG TẤT CẢ RETRIGGER ================= */
+const _bssRT40=buildScoreSteps;
+buildScoreSteps=function(played){
+ const b=_bssRT40(played);
+ try{
+  const eff=(b.scoring||[]).filter(c=>!(S.debuffSuit&&c.suit===S.debuffSuit&&c.enh!=='wild'));
+  if(!eff.length)return b;
+  const face=c=>c.rank>=11&&c.rank<=13;
+
+  if(has('sockBuskin'))eff.forEach(c=>{if(face(c))pushRT40(b,c,'🎪',null);});
+  if(has('hack'))eff.forEach(c=>{if(c.rank>=2&&c.rank<=5)pushRT40(b,c,'💻',null);});
+  if(has('dusk')&&S.handsLeft===1)eff.forEach(c=>pushRT40(b,c,'🌇',null));
+  if(has('seltzer')){
+   const j=S.jokers.find(x=>x.key==='seltzer');
+   if(j){
+    if(j._n40==null)j._n40=10;
+    if(j._n40>0){eff.forEach(c=>pushRT40(b,c,'🧊',null));j._n40-=1;
+     if(j._n40<=0){S.jokers=S.jokers.filter(x=>x.uid!==j.uid);say('🧊 Seltzer đã hết hiệu lực và biến mất!','#7fe3ff');}
+    }
+   }
+  }
+  if(has('echoTwin40')){const s=[...eff].sort(()=>Math.random()-.5).slice(0,2);s.forEach(c=>pushRT40(b,c,'👯‍♀️','#ff8ad8'));}
+  if(has('tripleEcho40'))eff.forEach((c,i)=>{if((i+1)%3===0)pushRT40(b,c,'🔔','#c9a0ff');});
+  if(has('shatterMirror40')){const m=eff.reduce((a,c)=>c.rank<a.rank?c:a,eff[0]);pushRT40(b,m,'🪞','#9be7ff');}
+  if(has('brightMirror40')){const m=eff.reduce((a,c)=>c.rank>a.rank?c:a,eff[0]);pushRT40(b,m,'🔆','#ffd76a');}
+  if(has('luckyEcho40')&&S.ancientSuit)eff.forEach(c=>{if(c.suit===S.ancientSuit)pushRT40(b,c,'🍀','#7fd18b');});
+  if(has('sealCaller40'))eff.forEach(c=>{if(c.seal&&c.seal!=='none')pushRT40(b,c,'👻','#c9a0ff');});
+  if(has('enhEcho40'))eff.forEach(c=>{if(c.enh&&c.enh!=='none')pushRT40(b,c,'⚗️','#7fe3ff');});
+  if(has('symEcho40')&&eff.length){pushRT40(b,eff[0],'🦋','#ff8ad8');if(eff.length>1)pushRT40(b,eff[eff.length-1],'🦋','#ff8ad8');}
+  if(has('stubbornEcho40')){const l=S.lastResult;if(l&&l.type===b.type)eff.forEach(c=>pushRT40(b,c,'🔁','#ffd76a'));}
+  if(has('infiniteEcho40'))eff.forEach(c=>{pushRT40(b,c,'♾️','#f0b84b');pushRT40(b,c,'♾️','#f0b84b');});
+ }catch(e){console.error(e);}
+ return b;
+};
+
+/* ================= E. SỬA LỖI BOSS "THE PLANT" (vô hiệu hóa lá mặt chưa triệt để) ================= */
+const bossOnPlant40=()=>!!(S&&S.boss&&String(S.boss.key).replace('_off_','')==='thePlant'&&!S.jokers.some(j=>j.key==='chicot'));
+const _bssPlant40=buildScoreSteps;
+buildScoreSteps=function(played){
+ const b=_bssPlant40(played);
+ try{
+  if(!bossOnPlant40())return b;
+  const faceCards=(b.scoring||[]).filter(c=>c.rank>=11&&c.rank<=13);
+  faceCards.forEach(c=>{
+   // Hoàn lại phần Chip cơ bản mà logic cũ (v26) đã lỡ trừ, để tránh trừ 2 lần
+   b.chips+=rankChips(c.rank);
+   // Hủy TOÀN BỘ các bước tính điểm gắn với đúng lá mặt này (Chip lẫn Mult, kể cả Enhancement/Edition/Seal)
+   b.steps.forEach(st=>{
+    if(st.targetSel===`[data-cid="${c.id}"]`&&!st._plantVoid){
+     st._plantVoid=true;
+     b.chips-=(st.chipDelta||0);
+     b.mult-=(st.multDelta||0);
+     if(st.multMulti&&st.multMulti!==1)b.mult/=st.multMulti;
+     st.chipDelta=0;st.multDelta=0;st.multMulti=1;
+     st.floatText='✕ Vô hiệu';st.floatColor='#9aa';
+     st.label='🌿 The Plant — '+st.label;
+    }
+   });
+  });
+  b.chips=Math.max(0,b.chips);b.mult=Math.max(0,b.mult);
+  b.total=Math.round(b.chips*Math.max(1,b.mult));
+ }catch(e){console.error(e);}
+ return b;
+};
+
+/* ================= F. CƠ CHẾ "QUEN MẶT": Joker thấy/sở hữu càng nhiều càng khó ra lại ================= */
+const FAM_SEEN_DECAY=0.35; // mỗi lần đã xuất hiện trong Shop (mua hay bỏ qua) làm giảm tỉ lệ thêm
+const FAM_OWN_DECAY=1.1;   // mỗi bản đang sở hữu làm giảm tỉ lệ mạnh hơn nữa
+const FAM_W40={C:0.65,U:0.27,R:0.08};
+
+function famTierCounts40(){const c={C:0,U:0,R:0};Object.values(JOKERS).forEach(d=>{if(c[d.rarity]!==undefined)c[d.rarity]++;});return c;}
+function famPick40(exclude){
+ const counts=famTierCounts40();
+ S.jokerFamiliarity=S.jokerFamiliarity||{};
+ const cands=Object.keys(JOKERS).filter(k=>JOKERS[k].rarity!=='L'&&!exclude.has(k));
+ if(!cands.length)return null;
+ const w=cands.map(k=>{
+  const r=JOKERS[k].rarity;
+  let base=(FAM_W40[r]||0.01)/(counts[r]||1);
+  const seenN=S.jokerFamiliarity[k]||0;
+  const ownN=S.jokers.filter(j=>j.key===k).length;
+  return base/(1+seenN*FAM_SEEN_DECAY+ownN*FAM_OWN_DECAY);
+ });
+ const tot=w.reduce((a,b2)=>a+b2,0)||1;
+ let roll=Math.random()*tot;
+ for(let i=0;i<cands.length;i++){roll-=w[i];if(roll<=0)return cands[i];}
+ return cands[cands.length-1];
+}
+function markSeen40(){
+ if(!S||!S.shopOffers||!S.shopOffers.jokers)return;
+ S.jokerFamiliarity=S.jokerFamiliarity||{};
+ S.shopOffers.jokers.forEach(o=>{if(o)S.jokerFamiliarity[o.key]=(S.jokerFamiliarity[o.key]||0)+1;});
+}
+function rerollFam40(){
+ if(!S||!S.shopOffers||!S.shopOffers.jokers)return;
+ const chosen=new Set();
+ S.shopOffers.jokers.forEach(o=>{if(o&&o.syn)chosen.add(o.key);}); // giữ nguyên Joker "hợp lối chơi" nếu có (v20)
+ S.shopOffers.jokers.forEach(o=>{
+  if(!o||o.syn)return;
+  const k=famPick40(chosen);
+  if(k){o.key=k;chosen.add(k);}
+ });
+}
+const _bsFam40=buildShop;
+buildShop=function(){_bsFam40();rerollFam40();markSeen40();};
+const _rrFam40=rerollShop;
+rerollShop=function(){
+ const before=S.shopOffers&&S.shopOffers.jokers;
+ _rrFam40();
+ if(S.shopOffers&&S.shopOffers.jokers!==before){rerollFam40();markSeen40();render();}
+};
+
+if(S)render();
+})();
 /* ===== ARCANUM v40: RETRIGGER JOKERS (SỬA SOCK AND BUSKIN + THÊM MỚI) ===== */
 (function(){
 const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
