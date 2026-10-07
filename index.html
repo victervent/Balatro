@@ -8,7 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Baloo+2:wght@500;600;700;800&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-                <link rel="icon" type="image/x-icon" href="https://cdn11.dienmaycholon.vn/filewebdmclnew/public/userupload/files/Image%20FP_2024/hinh-anime-2.jpg">
+               <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>
 :root{
   --felt-1:#0e3b2e; --felt-2:#0a2a21; --felt-edge:#082019;
@@ -6836,6 +6838,706 @@ function inject(){
 const _r=render;
 render=function(){_r();try{if(S&&S.phase==='shop')inject();}catch(e){console.error(e);}};
 if(S&&S.phase==='shop')render();
+})();
+/* ===== ARCANUM v46: BỘ MẶT SAU LÁ BÀI MỚI (Deck Skin) + KIỂM TRA & VÁ LỖI JOKER + JOKER FAN/SÁNG TẠO MỚI + XÓA TRIỆT ĐỂ SỔ JOKER ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.3rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1600);}
+
+/* ================= A. BỘ MẶT SAU LÁ BÀI MỚI (Deck Skin — giống Balatro có nhiều mặt sau để chọn) ================= */
+const SKINS={
+ red:{name:'Đỏ Cổ Điển',icon:'🔴'},
+ blue:{name:'Lam Cổ Điển',icon:'🔵'},
+ checker:{name:'Ca-rô Đen Trắng',icon:'🏁'},
+ plaid:{name:'Vải Kẻ Tím',icon:'🟣'},
+ nebula:{name:'Thiên Hà',icon:'🌌'},
+ gold:{name:'Vàng Hoàng Gia',icon:'👑'},
+ abyss:{name:'Vực Đen',icon:'⚫'},
+};
+const SKIN_LS='arcanumDeckSkinV1';
+function loadSkin(){try{return localStorage.getItem(SKIN_LS)||'red';}catch(e){return'red';}}
+function saveSkin(k){try{localStorage.setItem(SKIN_LS,k);}catch(e){}}
+window._deckSkin=loadSkin();
+window.pickSkin=function(k){window._deckSkin=k;saveSkin(k);document.body.dataset.skin=k;renderDeckSelect();};
+document.body.dataset.skin=window._deckSkin;
+
+const cssSkin=document.createElement('style');
+cssSkin.textContent=`
+.skin-row{display:flex;justify-content:center;gap:6px;margin:8px 0 2px;flex-wrap:wrap;}
+.skin-btn{width:40px;height:40px;border-radius:10px;font-size:1.1rem;background:rgba(0,0,0,.25);border:2px solid var(--panel-edge);transition:transform .12s;}
+.skin-btn:hover{transform:translateY(-3px);}
+.skin-btn.active{border-color:var(--gold);box-shadow:0 0 10px 2px rgba(240,184,75,.5);}
+.skin-desc{text-align:center;font-size:.75rem;color:var(--text-lo);margin-bottom:8px;}
+/* Mặt sau lá bài: chỉ áp dụng cho lá được úp / trang trí trong khi chờ (dùng trên .card khi thêm class card-back nếu cần, ở đây dùng để đổi viền/gradient của bộ bài trong thư viện & deck-mini) */
+body[data-skin="red"] .deck-mini{background:linear-gradient(145deg,#fff3f0,#ffd3cc);border-color:#e0495a;}
+body[data-skin="blue"] .deck-mini{background:linear-gradient(145deg,#eef3ff,#c9d9ff);border-color:#6f7bd6;}
+body[data-skin="checker"] .deck-mini{background:repeating-conic-gradient(#efe5cb 0% 25%,#1b1420 0% 50%) 0/10px 10px;border-color:#444;}
+body[data-skin="plaid"] .deck-mini{background:linear-gradient(135deg,#e8d6ff 25%,#c9a0ff 25% 50%,#e8d6ff 50% 75%,#c9a0ff 75%);background-size:14px 14px;border-color:#9a5fc9;}
+body[data-skin="nebula"] .deck-mini{background:radial-gradient(circle at 30% 30%,#ffd1e0,transparent 60%),radial-gradient(circle at 70% 70%,#9be7ff,transparent 60%),#1a1430;border-color:#c084fc;color:#f0e6ff;}
+body[data-skin="gold"] .deck-mini{background:linear-gradient(145deg,#fff3c4,#f0cd5c);border-color:#c99b1f;}
+body[data-skin="abyss"] .deck-mini{background:linear-gradient(145deg,#2a2a2a,#0a0a0a);border-color:#555;color:#ddd;}
+/* Viền HUD nhẹ đổi theo skin cho đồng bộ cảm giác, không ảnh hưởng gameplay */
+body[data-skin="nebula"] .score-box{box-shadow:0 6px 0 rgba(0,0,0,.25),0 0 18px rgba(192,132,252,.25);}
+body[data-skin="gold"] .score-box{box-shadow:0 6px 0 rgba(0,0,0,.25),0 0 18px rgba(240,184,75,.3);}
+`;
+document.head.appendChild(cssSkin);
+
+const _rdsSkin=renderDeckSelect;
+renderDeckSelect=function(){
+ _rdsSkin();
+ const app=document.getElementById('app');if(!app)return;
+ if(app.querySelector('.skin-row'))return;
+ const h1=app.querySelector('h1');if(!h1)return;
+ const idx=window._deckSkin;
+ const row=`<div class="skin-row">${Object.entries(SKINS).map(([k,d])=>`<button class="skin-btn ${k===idx?'active':''}" title="${d.name}" onclick="pickSkin('${k}')">${d.icon}</button>`).join('')}</div><div class="skin-desc">Mặt sau bộ bài: <b style="color:var(--gold)">${SKINS[idx].icon} ${SKINS[idx].name}</b> (chỉ là giao diện, không ảnh hưởng gameplay)</div>`;
+ const stakeRow=app.querySelector('.stake-row');
+ if(stakeRow)stakeRow.insertAdjacentHTML('beforebegin',row);
+ else h1.insertAdjacentHTML('afterend',row);
+};
+
+/* ================= B. KIỂM TRA & VÁ LỖI JOKER (chống crash + vài lỗi phát hiện được) ================= */
+// B1. Bọc an toàn calc() của MỌI joker: 1 lá lỗi không còn làm hỏng toàn bộ phép tính điểm
+Object.keys(JOKERS).forEach(k=>{
+ const def=JOKERS[k];if(!def||typeof def.calc!=='function'||def._safe46)return;
+ const orig=def.calc;
+ def.calc=function(ctx){
+  try{const r=orig(ctx);return r&&typeof r==='object'?r:{};}
+  catch(e){console.error('Joker lỗi: '+k,e);return{};}
+ };
+ def._safe46=true;
+});
+
+// B2. Fix: "Stencil" (Joker Stencil) tính luôn cả chính nó + Negative sai số — chuẩn hoá lại theo đúng công thức Balatro
+if(JOKERS.stencil){
+ JOKERS.stencil.calc=c=>{
+  const empty=Math.max(0,c.state.maxJokerSlots-c.ownedJokerCount);
+  return{xmult:Math.max(1,1+empty)};
+ };
+}
+
+// B3. Fix: "Turtle Bean" chỉ có passive rỗng, cỡ tay không giảm dần đúng theo Ante như mô tả — áp dụng thật
+if(JOKERS.turtleBean){
+ const _sbTB=setupBlind;
+ setupBlind=function(){
+  _sbTB();
+  if(has('turtleBean')){const bonus=Math.max(0,5-(S.ante-1));S.handSize+=bonus;}
+ };
+}
+
+// B4. Fix: "Smeared Joker" chỉ đổi cách tính Flush nhưng Straight không nhận biết màu — đã đúng ở evaluateHand, không cần sửa thêm (kiểm tra OK).
+
+// B5. Fix: Voucher "The Director" (directorMode) chưa có hiệu ứng gì — kích hoạt Seal của lá đang giữ mỗi lượt
+const _bssDir46=buildScoreSteps;
+buildScoreSteps=function(played){
+ const b=_bssDir46(played);
+ try{
+  if(S&&S.directorMode){
+   const held=S.hand.filter(h=>!played.some(p=>p.id===h.id));
+   held.forEach(c=>{
+    if(c.seal==='gold'){S.money+=3;b.steps.push({label:'🎥 Director — Seal Vàng',chipDelta:0,multDelta:0,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:'+$3',floatColor:'#f0b84b',delay:140});}
+    if(c.seal==='orange'){S.money+=2;b.steps.push({label:'🎥 Director — Seal Cam',chipDelta:0,multDelta:0,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:'+$2',floatColor:'#ff8c3a',delay:140});}
+   });
+  }
+ }catch(e){console.error(e);}
+ return b;
+};
+
+// B6. Fix: "Certificate" passive thêm lá có Seal nhưng không có Edition — giữ nguyên hành vi hiện tại là đúng, chỉ bọc an toàn (đã có ở B1).
+
+// B7. Fix: Joker "Midas Mask" (midas) đổi lá mặt thành Gold khi tính điểm nhưng v20 chỉ áp dụng ở finalizeScore sau khi đã tính xong — nay cũng áp dụng ngay khi thắng Blind để không bỏ sót lá được giữ lại
+const _wbMidas46=winBlind;
+winBlind=function(){
+ if(has('midas')){
+  S.hand.forEach(c=>{if(c.rank>=11&&c.rank<=13&&c.enh!=='gold'){c.enh='gold';const f=S.fullDeck.find(x=>x.id===c.id);if(f)f.enh='gold';}});
+ }
+ _wbMidas46();
+};
+
+/* ================= C. JOKER FAN-MADE + TỰ SÁNG TẠO MỚI (16 lá) ================= */
+const NEW46={
+ // Fan-made (lấy cảm hứng cộng đồng Balatro)
+ echoChamber46:{name:'Phòng Vọng Âm',icon:'🏛️',cost:6,rarity:'U',desc:'[Fan] +1 Mult mỗi lá KHÔNG được tính điểm (bị loại khỏi bộ bài poker đang đánh).',calc:c=>{const n=c.playedCards.length-c.scoringCards.length;return n>0?{mult:n}:{};}},
+ oddOneOut46:{name:'Kẻ Lạc Loài',icon:'🦒',cost:6,rarity:'U',desc:'[Fan] x2 Mult nếu chơi đúng 1 lá duy nhất.',calc:c=>c.playedCards.length===1?{xmult:2}:{}},
+ fullDeckFan46:{name:'Bộ Bài Trọn Vẹn',icon:'🎴',cost:7,rarity:'U',desc:'[Fan] +1 Mult mỗi lá còn nguyên bản (52 lá gốc, chưa Enhancement/Edition/Seal) trong bộ bài.',calc:c=>{const n=c.state.fullDeck.filter(x=>(!x.enh||x.enh==='none')&&(!x.edition||x.edition==='none')&&(!x.seal||x.seal==='none')).length;return{mult:Math.min(20,Math.floor(n/4))};}},
+ mirrorMatch46:{name:'Cặp Song Trùng',icon:'👬',cost:6,rarity:'U',desc:'[Fan] x1.5 Mult nếu 2 lá được tính có CHẤT giống nhau VÀ bậc cách nhau đúng 1.',calc:c=>{const sc=c.scoringCards;for(let i=0;i<sc.length;i++)for(let j=i+1;j<sc.length;j++){if(sc[i].suit===sc[j].suit&&Math.abs(sc[i].rank-sc[j].rank)===1)return{xmult:1.5};}return{};}},
+ lateBloomer46:{name:'Hoa Nở Muộn',icon:'🌼',cost:5,rarity:'C',desc:'[Fan] +5 Mult mỗi lượt Chơi bài, TĂNG DẦN theo số lượt đã chơi trong Blind này.',calc:c=>({mult:5*(c.state.baseHands-c.state.handsLeft+1)})},
+ // Tự sáng tạo
+ cardCounter46:{name:'Người Đếm Lá',icon:'🧮',cost:6,rarity:'U',desc:' +3 Mult mỗi 5 lá đã được rút khỏi bộ bài trong ván (tổng 52 - số lá còn lại).',calc:c=>({mult:3*Math.floor(Math.max(0,52-c.state.deck.length-c.state.hand.length)/5)})},
+ twinFlame46:{name:'Song Hỏa',icon:'🔥',cost:7,rarity:'U',desc:' +4 Mult mỗi lá Cơ VÀ mỗi lá Rô được tính (chỉ tính khi CẢ HAI chất đều xuất hiện).',calc:c=>{const h=c.scoringCards.some(x=>x.suit==='H'),d=c.scoringCards.some(x=>x.suit==='D');if(!h||!d)return{};return{mult:4*c.scoringCards.filter(x=>x.suit==='H'||x.suit==='D').length};}},
+ fairTrade46:{name:'Trao Đổi Công Bằng',icon:'⚖️',cost:6,rarity:'U',desc:' Mỗi lượt Bỏ bài: -$1 nhưng +6 Mult cho lượt Chơi bài NGAY SAU ĐÓ.',calc:c=>({mult:c.self.fairPending||0})},
+ risingTide46:{name:'Triều Dâng',icon:'🌊',cost:8,rarity:'R',desc:' +1 Mult vĩnh viễn mỗi lượt Chơi bài đạt từ 500 điểm trở lên (không giới hạn).',calc:c=>({mult:c.state.risingTideN||0})},
+ nightMarket46:{name:'Chợ Đêm',icon:'🏮',cost:7,rarity:'U',desc:' Mỗi lượt Chơi bài diễn ra khi còn ≤$5: +20 Mult.',calc:c=>c.state.money<=5?{mult:20}:{}},
+ colorBlind46:{name:'Mù Màu',icon:'🎨',cost:6,rarity:'U',desc:' x1.4 Mult nếu lá được tính có ĐỦ cả 2 màu (đỏ và đen).',calc:c=>{const r=c.scoringCards.some(x=>x.suit==='H'||x.suit==='D'),bl=c.scoringCards.some(x=>x.suit==='S'||x.suit==='C');return(r&&bl)?{xmult:1.4}:{};}},
+ handRecycler46:{name:'Tái Chế Bộ Bài',icon:'♻️',cost:6,rarity:'U',desc:' Khi bộ bài rút CẠN (0 lá) ngay trước khi rút bù: +$5 và +10 Mult cho lượt kế tiếp.',calc:c=>({mult:c.self.recyclePending||0})},
+ ironWallet46:{name:'Ví Sắt',icon:'👛',cost:6,rarity:'U',desc:' +1 Mult mỗi $10 đang có, nhưng KHÔNG tính $ âm (an toàn với nợ).',calc:c=>({mult:Math.max(0,Math.floor(c.state.money/10))})},
+ patchwork46:{name:'Mảnh Ghép Vá',icon:'🧵',cost:6,rarity:'U',desc:' +4 Mult mỗi LOẠI Enhancement khác nhau có trong lá được tính (tối đa 5 loại).',calc:c=>({mult:4*new Set(c.scoringCards.filter(x=>x.enh&&x.enh!=='none').map(x=>x.enh)).size})},
+ graveRobber46:{name:'Trộm Mộ',icon:'⚰️',cost:7,rarity:'U',desc:' +3 Mult mỗi lá đã bị phá hủy vĩnh viễn khỏi bộ bài trong ván (Hanged Man, Tiệm Tỉa...).',calc:c=>({mult:3*(c.state.destroyedCount||0)})},
+ soloFlight46:{name:'Chuyến Bay Đơn Độc',icon:'🕊️',cost:8,rarity:'R',desc:' x3 Mult nếu bạn chỉ sở hữu đúng 1 Joker (kể cả chính nó).',calc:c=>c.state.jokers.length===1?{xmult:3}:{}},
+ grandFinale46:{name:'Màn Kết Hoành Tráng',icon:'🎆',cost:12,rarity:'L',desc:' Lượt Chơi bài CUỐI CÙNG của Blind: x2.5 Mult VÀ +200 Chip.',calc:c=>c.state.handsLeft===1?{xmult:2.5,chips:200}:{}},
+};
+Object.entries(NEW46).forEach(([k,d])=>{d.key=k;JOKERS[k]=d;});
+
+// Hỗ trợ: Trao Đổi Công Bằng (ghi nhận lúc Bỏ bài, trả thưởng lượt sau)
+const _dsFair46=discardSelected;
+discardSelected=function(){
+ const active=S&&S.phase==='playing'&&S.selected.length>0&&S.discardsLeft>0&&has('fairTrade46');
+ _dsFair46();
+ if(active){S.money=Math.max(0,S.money-1);const j=S.jokers.find(x=>x.key==='fairTrade46');if(j)j.fairPending=6;render();}
+};
+const _fsFair46=finalizeScore;
+finalizeScore=function(b){
+ const j=S.jokers.find(x=>x.key==='fairTrade46');if(j)j.fairPending=0;
+ if(has('risingTide46')&&b.total>=500)S.risingTideN=(S.risingTideN||0)+1;
+ _fsFair46(b);
+};
+// Hỗ trợ: Chợ Đêm đã tính trực tiếp qua state.money, không cần hook thêm.
+// Hỗ trợ: Tái Chế Bộ Bài — phát hiện bộ bài rút cạn ngay trước khi rút bù
+const _dtRecycle46=drawTo;
+drawTo=function(n){
+ if(S&&has('handRecycler46')&&S.deck.length===0&&S.fullDeck.length>0){
+  S.money+=5;const j=S.jokers.find(x=>x.key==='handRecycler46');if(j)j.recyclePending=10;say('♻️ Chợ tái chế: +$5, +10 Mult lượt sau!','#7fd18b');
+ }
+ _dtRecycle46(n);
+};
+const _fsRecycle46=finalizeScore;
+finalizeScore=function(b){const j=S.jokers.find(x=>x.key==='handRecycler46');if(j)j.recyclePending=0;_fsRecycle46(b);};
+// Hỗ trợ: Trộm Mộ — đếm lá bị phá hủy vĩnh viễn (Hanged Man, v27 Thợ Tỉa...)
+const _thDestroy46=TAROTS.hangedMan?TAROTS.hangedMan.effect:null;
+if(_thDestroy46)TAROTS.hangedMan.effect=(sel,st)=>{st.destroyedCount=(st.destroyedCount||0)+sel.length;return _thDestroy46(sel,st);};
+
+/* ================= D. XÓA TRIỆT ĐỂ SỔ JOKER (quét liên tục + chặn mọi lối vào) ================= */
+window.toggleJokerBook=function(){const ex=document.getElementById('jbookModal');if(ex)ex.remove();};
+window.jbClaim=function(){};
+window.drawBook=function(){};
+function sweep46(){
+ document.querySelectorAll('#jbookModal').forEach(e=>e.remove());
+ document.querySelectorAll('[data-jbook]').forEach(e=>e.remove());
+ document.querySelectorAll('button').forEach(b=>{
+  if(b.textContent.trim()==='📖'||(b.title||'').includes('Sổ')||(b.title||'').includes('Joker Book'))b.remove();
+ });
+}
+sweep46();
+new MutationObserver(muts=>{
+ let need=false;
+ muts.forEach(m=>m.addedNodes.forEach(n=>{
+  if(n.nodeType!==1)return;
+  if(n.id==='jbookModal'||(n.hasAttribute&&n.hasAttribute('data-jbook')))need=true;
+  if(n.textContent&&n.textContent.trim()==='📖')need=true;
+ }));
+ if(need)sweep46();
+}).observe(document.body,{childList:true,subtree:true});
+const _rds46=renderDeckSelect;renderDeckSelect=function(){_rds46();sweep46();};
+const _r46=render;render=function(){_r46();sweep46();};
+
+if(S)render();else renderDeckSelect();
+})();
+/* ===== ARCANUM vFIX1: TỰ XOÁ VÁN LƯU CŨ KHI CODE ĐƯỢC CẬP NHẬT ===== */
+(function(){
+// 🔧 MỖI LẦN BẠN SỬA CODE XONG: đổi số bên dưới (vd 1.0 -> 1.1) rồi lưu lại.
+// Khi số này khác với lần mở trước, game sẽ tự xoá ván chơi dở để nạp đúng nội dung mới.
+// (Xu, Danh hiệu, Bộ bài đã mở khoá, Bảng điểm KHÔNG bị xoá — chỉ xoá ván đang chơi dở.)
+const GAME_VERSION='1.0';
+const VER_LS='arcanumGameVersion';
+try{
+ const old=localStorage.getItem(VER_LS);
+ if(old!==GAME_VERSION){
+  localStorage.removeItem('arcanumSaveV1');
+  localStorage.setItem(VER_LS,GAME_VERSION);
+ }
+}catch(e){}
+})();
+/* ===== ARCANUM vFIX2: CHỐNG TRÙNG ICON — CHẠY SAU CÙNG, BAO HẾT MỌI JOKER MỚI ===== */
+(function(){
+const BIG_POOL=[
+ '🦄','🐙','🦋','🐝','🦔','🐳','🦜','🦩','🐘','🦒','🦘','🦥','🦦','🦨','🐿️','🦎','🦑','🦞','🦀','🐚',
+ '🪸','🌵','🍄','🌻','🌺','🍁','🍎','🍒','🍉','🥝','🍩','🍪','🧁','🍰','🥨','🧀','🍔','🌮','🍣','🥟',
+ '🧋','🏺','🪆','🪅','🧶','🪡','🎻','🎺','🎷','🪗','🛶','⛵','🚁','🛼','🪁','🧨','🍇','🍈','🍋','🍊',
+ '🍑','🍐','🥭','🥥','🫐','🍅','🥑','🌶️','🫑','🥦','🥬','🥔','🍠','🌰','🫘','🍞','🥐','🥯','🧇','🥞',
+ '🧈','🧂','🥓','🍗','🍖','🌭','🍕','🥪','🥙','🧆','🥘','🍝','🍜','🍲','🍛','🍣','🍤','🍥','🥮','🍡',
+ '🍧','🍨','🍦','🥧','🎂','🍮','🍭','🍬','🍫','🍿','🧊','🥤','🧃','🧉','🍺','🍷','🥂','🍾','🥃','🍹',
+ '🍸','☕','🍵','🪀','🎏','🎐','🧧','🎀','🎁','🎉','🎊','🪩','🎈','🪄','🔬','🧪','🧫','🩺','💊','🩹',
+ '🧴','🧷','🧹','🪣','🧽','🪥','🪒','🧼','🪮','🪟','🪑','🛋️','🛏️','🚪','🪜','🦴','🫀','🫁','🧠','👣',
+ '👂','👃','🫧','🌪️','🌫️','☂️','🔥','🌋','🪃','🛡️','⚔️','🏹','🪖','🎣','🪝','🧭','🗺️','🏔️','⛰️','🏕️',
+ '🛤️','🚂','🛸','🚤','🚲','🛴','🏍️','🦚','🦃','🦆','🦅','🦇','🐢','🐊','🦓','🐆','🦬','🐂','🦮','🐕‍🦺',
+ '🐈‍⬛','🐓','🦤','🦭','🐡','🐠','🐟','🐬','🦈','🕸️','🕷️','🦟','🪰','🪱','🦗','🐌','🐞','🦂','🪲','🪳',
+ '🐜','🦟','🪷','🌼','🌷','🌸','🌹','🥀','🍂','🍃','🍀','🌴','🌲','🌳','🌾','🪹','🪺','🫧','🧿','🪬',
+ '🔱','⚜️','🏵️','🎗️','🏅','🥇','🥈','🥉','🏓','🏸','🥊','🥋','🎽','⛸️','🎿','🛷','🏂','🪂','🏄','🚣',
+ '🏊','🚴','🧗','🤺','🏇','🧘','🛌','🎮','🕹️','🧩','🎳','🎱','🔮','📿','🪩','🧯','🪤','🪓','🔪','🗝️',
+ '🔐','🔓','🧰','🪛','🔧','🔩','⚙️','🪤','🧱','🪨','🛢️','💈','🧲','🪜','🪫','🔋','🔌','💡','🔦','🏮',
+];
+const usedIcons=new Set();
+const freq={};
+Object.values(JOKERS).forEach(d=>{freq[d.icon]=(freq[d.icon]||0)+1;});
+Object.entries(JOKERS).forEach(([k,d])=>{
+ if(freq[d.icon]===1){usedIcons.add(d.icon);return;}
+ // trùng lặp: lá đầu tiên gặp (theo thứ tự object) giữ icon, các lá sau đổi
+ if(!usedIcons.has(d.icon)){usedIcons.add(d.icon);return;}
+ const next=BIG_POOL.find(x=>!usedIcons.has(x));
+ d.icon=next||'🔸';
+ usedIcons.add(d.icon);
+});
+})();
+/* ===== ARCANUM v47: SỬA HÀNG LOẠT LỖI (Fool, Retrigger, Mirror Hand, Turtle Bean, Brainstorm, Black Hole x2, Serpent, Idol, Gift Card, Planet không giới hạn, Info Seal) ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const has47=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say47(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.3rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1600);}
+
+/* ================= 1. FIX THE FOOL (crash khi dùng) =================
+   Lỗi gốc: effect gọi addConsumable(st.lastConsumable) nhưng lastConsumable
+   là OBJECT {type,key}, trong khi addConsumable cần một CHUỖI key — gây lỗi
+   khi lá được tạo ra (key sai kiểu) rồi game văng khi hiển thị/dùng nó. */
+if(TAROTS.fool){
+ TAROTS.fool.effect=(sel,st)=>{
+  if(st.lastConsumable&&st.lastConsumable.key){
+   const lc=st.lastConsumable;
+   const ok=addConsumable(lc.key);
+   return ok?('Đã tạo '+labelOf(lc)+'.'):'Hết chỗ chứa!';
+  }
+  return'Chưa có lá nào.';
+ };
+}
+
+/* ================= 2. ĐỘNG CƠ RETRIGGER THỐNG NHẤT (sửa toàn bộ lá "kích hoạt lại" không hoạt động) =================
+   Viết lại từ đầu, gọn & chắc chắn chạy, không phụ thuộc các hook rời rạc cũ. */
+function cc47(c){
+ let cc=rankChips(c.rank);
+ if(c.enh==='bonus')cc+=30; if(c.enh==='stone')cc=50; if(c.enh==='wild')cc+=10; if(c.edition==='foil')cc+=50;
+ let mD=0,mM=1,lucky=false;
+ if(c.enh==='mult')mD+=4; if(c.edition==='holo')mD+=10;
+ if(c.enh==='glass')mM*=2; if(c.edition==='poly')mM*=1.5;
+ if(c.enh==='lucky'&&Math.random()<0.2){mD+=20;lucky=true;}
+ if(c.enh==='lucky'&&Math.random()<0.07)S.money+=20;
+ if(c.seal==='gold')S.money+=3; if(c.seal==='red')mM*=1.5;
+ if(c.seal==='orange')S.money+=2;
+ return{cc,mD,mM,lucky};
+}
+function pushRT47(b,c,tag){
+ const{cc,mD,mM,lucky}=cc47(c);
+ b.chips+=cc;b.mult+=mD;b.mult*=mM;
+ b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));
+ let ft='';if(cc)ft+=`+${cc}`;if(mD)ft+=(ft?' ':'')+`+${mD}✦`;if(mM!==1)ft+=(ft?' ':'')+`x${mM.toFixed(1)}✦`;if(lucky)ft+=' 🍀';
+ b.steps.push({label:`${tag} ${rankLabel(c.rank)}${SUITS[c.suit].sym} (Retrigger)`,chipDelta:cc,multDelta:mD,multMulti:mM,targetSel:`[data-cid="${c.id}"]`,floatText:ft||'♪',floatColor:'#ffd76a',delay:170});
+}
+const RT_SELECT47={
+ sockBuskin:eff=>eff.filter(c=>c.rank>=11&&c.rank<=13),
+ hangingChad:eff=>eff.length?[eff[0],eff[0]]:[],
+ hack:eff=>eff.filter(c=>c.rank>=2&&c.rank<=5),
+ dusk:eff=>(S.handsLeft===1)?eff.slice():[],
+ echoDau:eff=>eff.length?[eff[0]]:[],
+ vangVongCuoi:eff=>eff.length?[eff[eff.length-1]]:[],
+ tamTrungGiua:eff=>{const m=eff[Math.floor((eff.length-1)/2)];return m?[m,m]:[];},
+ songTrungLe:eff=>eff.filter((c,i)=>i%2===0),
+ songTrungChan:eff=>eff.filter((c,i)=>i%2===1),
+ echoNgauNhien:eff=>eff.length?[pick(eff)]:[],
+ daiVongMoiLa:eff=>eff.slice(),
+ echoTwin40:eff=>[...eff].sort(()=>Math.random()-.5).slice(0,2),
+ tripleEcho40:eff=>eff.filter((c,i)=>(i+1)%3===0),
+ shatterMirror40:eff=>eff.length?[eff.reduce((a,c)=>c.rank<a.rank?c:a,eff[0])]:[],
+ brightMirror40:eff=>eff.length?[eff.reduce((a,c)=>c.rank>a.rank?c:a,eff[0])]:[],
+ luckyEcho40:eff=>S.ancientSuit?eff.filter(c=>c.suit===S.ancientSuit):[],
+ sealCaller40:eff=>eff.filter(c=>c.seal&&c.seal!=='none'),
+ enhEcho40:eff=>eff.filter(c=>c.enh&&c.enh!=='none'),
+ symEcho40:eff=>eff.length>1?[eff[0],eff[eff.length-1]]:eff.slice(),
+ infiniteEcho40:eff=>eff.concat(eff),
+ aceEcho:eff=>eff.filter(c=>c.rank===14),
+ heartEcho:eff=>eff.filter(c=>c.suit==='H'),
+ wildEcho:eff=>eff.filter(c=>c.enh==='wild'),
+ enhEcho:eff=>eff.filter(c=>c.enh&&c.enh!=='none'),
+ sealEcho:eff=>eff.filter(c=>c.seal&&c.seal!=='none'),
+ goldEcho:eff=>eff.filter(c=>c.enh==='gold'),
+ grandEcho:eff=>eff.concat(eff),
+};
+const _bssRT47=buildScoreSteps;
+buildScoreSteps=function(played){
+ const b=_bssRT47(played);
+ try{
+  const eff=(b.scoring||[]).filter(c=>!(S.debuffSuit&&c.suit===S.debuffSuit&&c.enh!=='wild')&&!(S.plantDebuff&&c.rank>=11&&c.rank<=13&&c.enh!=='wild'));
+  if(!eff.length)return b;
+  // Seltzer: giới hạn 10 lần dùng rồi biến mất
+  if(has47('seltzer')){
+   const j=S.jokers.find(x=>x.key==='seltzer');
+   if(j){
+    if(j._uses47==null)j._uses47=10;
+    if(j._uses47>0){j._uses47--;eff.forEach(c=>pushRT47(b,c,'🧊'));
+     if(j._uses47<=0){S.jokers=S.jokers.filter(x=>x.uid!==j.uid);say47('🧊 Seltzer đã hết hiệu lực!','#7fe3ff');}
+    }
+   }
+  }
+  if(has47('stubbornEcho40')){
+   const l=S.lastResult;
+   if(l&&l.type===b.type)eff.forEach(c=>pushRT47(b,c,'🔁'));
+  }
+  Object.keys(RT_SELECT47).forEach(key=>{
+   if(key==='seltzer')return;
+   if(!has47(key))return;
+   const cards=RT_SELECT47[key](eff);
+   cards.forEach(c=>pushRT47(b,c,'✦'));
+  });
+ }catch(e){console.error('Retrigger lỗi:',e);}
+ return b;
+};
+
+/* ================= 3. BÀN TAY PHẢN CHIẾU — copy lá LIỀN KỀ BÊN TRÁI (giống Blueprint) ================= */
+if(JOKERS.v34_mirrorHand){
+ JOKERS.v34_mirrorHand.calc=()=>({});
+ JOKERS.v34_mirrorHand.desc='Sao chép TOÀN BỘ khả năng của Joker liền kề bên TRÁI nó (giống Blueprint).';
+}
+function mhInjections47(){
+ if(!S||!S.jokers)return[];
+ const list=[];
+ S.jokers.forEach((j,idx)=>{
+  if(j._mhVirtual47)return;
+  if(j.key==='v34_mirrorHand'&&idx>0){
+   const left=S.jokers[idx-1];
+   if(left&&!left._mhVirtual47&&left.key!=='v34_mirrorHand')
+    list.push({after:j.uid,key:left.key,edition:left.edition});
+  }
+ });
+ return list;
+}
+function withMHCopy47(fn){
+ return function(){
+  const injected=[];
+  try{
+   if(S&&S.jokers&&S.jokers.some(j=>j.key==='v34_mirrorHand')){
+    mhInjections47().forEach(p=>{
+     const idx=S.jokers.findIndex(j=>j.uid===p.after);if(idx<0)return;
+     const v={uid:'mhv_'+Math.random().toString(36).slice(2),key:p.key,edition:p.edition||'none',_mhVirtual47:true};
+     S.jokers.splice(idx+1,0,v);injected.push(v.uid);
+    });
+   }
+   return fn.apply(null,arguments);
+  }finally{
+   if(injected.length&&S&&S.jokers)S.jokers=S.jokers.filter(j=>!injected.includes(j.uid));
+  }
+ };
+}
+buildScoreSteps=withMHCopy47(buildScoreSteps);
+winBlind=withMHCopy47(winBlind);
+const _acMH47=activeJokerCount;
+activeJokerCount=function(state){const st=state||S;return st.jokers.filter(j=>j.edition!=='negative'&&!j._bpVirtual&&!j._mhVirtual47).length;};
+const _rjrMH47=renderJokerRow;
+renderJokerRow=function(){
+ if(S&&S.jokers&&S.jokers.some(j=>j._mhVirtual47)){
+  const saved=S.jokers;S.jokers=saved.filter(j=>!j._mhVirtual47);
+  try{return _rjrMH47();}finally{S.jokers=saved;}
+ }
+ return _rjrMH47();
+};
+
+/* ================= 4. TURTLE BEAN — biến mất sau 5 vòng ================= */
+if(JOKERS.turtleBean){
+ JOKERS.turtleBean.desc='+Cỡ bài (giảm dần theo Ante). Joker này sẽ TỰ BIẾN MẤT sau 5 vòng (Blind) kể từ khi mua.';
+}
+const _sbTurtle47=setupBlind;
+setupBlind=function(){
+ _sbTurtle47();
+ if(has47('turtleBean')){
+  const j=S.jokers.find(x=>x.key==='turtleBean');
+  if(j){
+   j.tbRounds47=(j.tbRounds47||0)+1;
+   if(j.tbRounds47>5){
+    S.jokers=S.jokers.filter(x=>x.uid!==j.uid);
+    say47('🐢 Turtle Bean đã rút lui sau 5 vòng!','#7fd18b');
+   }
+  }
+ }
+};
+
+/* ================= 5. BLACK HOLE (consumable Planet) — không còn kích hoạt 2 lần + PLANET KHÔNG GIỚI HẠN CẤP ================= */
+window._suppressAutoUse47=false;
+const _bucOldChain47=beginUseConsumable;
+beginUseConsumable=function(uidVal){
+ if(window._suppressAutoUse47)return;
+ const idx=S.consumables.findIndex(c=>c.uid===uidVal);if(idx<0)return;
+ const c=S.consumables[idx];
+ if(c.type==='planet'&&PLANETS[c.key]){
+  const hand=PLANETS[c.key].hand;
+  if(S.observatoryMode){S.message=`${PLANETS[c.key].name}: Observatory mode — bị giữ lại cho scoring!`;render();return;}
+  if(hand==='ALL'){
+   Object.keys(S.handLevels).forEach(k=>{if(k!=='ALL')S.handLevels[k]=(S.handLevels[k]||1)+1;}); // KHÔNG GIỚI HẠN
+   S.message=`${PLANETS[c.key].name}: Tất cả loại bài +1 cấp!`;
+  }else{
+   S.handLevels[hand]=(S.handLevels[hand]||1)+1; // KHÔNG GIỚI HẠN
+   S.message=`${PLANETS[c.key].name}: ${HAND_TYPES[hand].name} lên cấp ${S.handLevels[hand]}!`;
+  }
+  S.lastConsumable={type:'planet',key:c.key};
+  S.consumables.splice(idx,1);
+  S.planetUsedCount=(S.planetUsedCount||0)+1;
+  render();return;
+ }
+ return _bucOldChain47(uidVal);
+};
+const _bcOldChain47=buyConsumable;
+buyConsumable=function(idx){
+ window._suppressAutoUse47=true;
+ try{_bcOldChain47(idx);}finally{window._suppressAutoUse47=false;}
+};
+
+/* Dịch vụ "Viện Nghiên Cứu Bài" trong tab Dịch Vụ Shop (v45) cũng không còn giới hạn cấp 15 */
+if(window.buySvc){
+ const _buySvcOld47=window.buySvc;
+ window.buySvc=function(k){
+  if(k==='level'){
+   if(!S||S.phase!=='shop')return;
+   const key=window._svcHand||'Pair';
+   if(!HAND_TYPES[key]||key==='ALL')return;
+   const n=((S.svcBought||{})[key]&&0)||((S.svcBought||{}).level)||0;
+   const cost=Math.max(1,Math.round((8+3*n)*(S.priceMult||1)));
+   if(!S.shopAllFree&&S.money<cost)return;
+   S.handLevels[key]=(S.handLevels[key]||1)+1; // KHÔNG GIỚI HẠN 15
+   if(!S.shopAllFree)S.money-=cost;
+   S.svcBought=S.svcBought||{};S.svcBought.level=n+1;
+   say47('✅ '+HAND_TYPES[key].name+' → cấp '+S.handLevels[key],'#7fd18b');
+   render();return;
+  }
+  return _buySvcOld47(k);
+ };
+}
+
+/* ================= 6. THE SERPENT — thêm 2 lá ngẫu nhiên vào tay, KHÔNG thay thế lá nào ================= */
+function bossKeyNow47(){return S&&S.boss?String(S.boss.key).replace('_off_',''):null;}
+const bossList=BOSSES.find(b=>b.key==='theSerpent');
+if(bossList)bossList.desc='Sau mỗi lượt Chơi hoặc Bỏ bài: +2 lá bài ngẫu nhiên từ bộ bài được thêm thẳng vào tay (không trộn/mất lá nào).';
+drawTo=function(n){
+ if(S&&bossKeyNow47()==='theSerpent'&&!S.jokers.some(j=>j.key==='chicot')){
+  for(let i=0;i<2&&S.deck.length>0;i++){
+   const idx=Math.floor(Math.random()*S.deck.length);
+   const c=S.deck.splice(idx,1)[0];
+   if(c)S.hand.push(c);
+  }
+ }
+ try{
+  if(S&&S.deckBias&&S.deck.length>1){
+   const wS=S.suitPlayCount||{},wR=S.rankPlayCount||{};
+   const w=c=>(wS[c.suit]||0)+(wR[c.rank]||0)+Math.random()*2;
+   S.deck.sort((a,b)=>w(a)-w(b));
+  }
+  if(S&&(has47('numberSeeker')||has47('faceHunter'))&&S.deck.length>1){
+   const bw=c=>{let w=0;if(has47('numberSeeker')&&c.rank>=2&&c.rank<=10)w+=6;if(has47('faceHunter')&&c.rank>=11&&c.rank<=13)w+=7;return w;};
+   S.deck.forEach(c=>c._w47=bw(c)+Math.random()*3);
+   S.deck.sort((a,b)=>a._w47-b._w47);
+  }
+ }catch(e){}
+ const target=Math.min(n,S.handSize);
+ while(S.hand.length<target&&S.deck.length>0){S.hand.push(S.deck.pop());}
+};
+
+/* ================= 7. THE IDOL — hiện lá đang được nhân đôi hiện tại ================= */
+const _siIdol47=window.showInfo;
+window.showInfo=function(kind,id){
+ _siIdol47(kind,id);
+ try{
+  if(kind==='joker'){
+   const j=S.jokers.find(x=>x.uid===id);
+   if(j&&j.key==='idol'&&S.idolRank){
+    const p=document.querySelector('#infoModal .modal p');
+    if(p)p.insertAdjacentHTML('afterend','<p style="color:#ffd76a">🗽 Đang nhân đôi: '+rankLabel(S.idolRank)+SUITS[S.ancientSuit].sym+' ('+SUITS[S.ancientSuit].name+')</p>');
+   }
+  }
+ }catch(e){}
+};
+const _rIdol47=render;
+render=function(){
+ _rIdol47();
+ try{
+  if(S&&S.idolRank&&S.ancientSuit){
+   S.jokers.forEach(j=>{
+    if(j.key==='idol'){
+     const el=document.querySelector(`.joker-card[data-juid="${j.uid}"]`);
+     if(el&&!el.querySelector('.idol-badge47'))el.insertAdjacentHTML('beforeend','<div class="jcount idol-badge47">🎯 '+rankLabel(S.idolRank)+SUITS[S.ancientSuit].sym+'</div>');
+    }
+   });
+  }
+ }catch(e){}
+};
+
+/* ================= 8. GIFT CARD (và Egg/sellMult) — thêm render() sau khi bán để tiền hiển thị ngay ================= */
+const _sjGift47=sellJoker;
+sellJoker=function(u){_sjGift47(u);render();};
+const _scGift47=sellConsumable;
+sellConsumable=function(u){_scGift47(u);render();};
+
+/* ================= 9. INFO ("?") — bổ sung mô tả Seal Cam & Seal Trắng còn thiếu ================= */
+const _rrSeal47=renderRulesModal;
+renderRulesModal=function(flag){
+ _rrSeal47(flag);
+ try{
+  const m=document.getElementById('rulesModal');
+  if(m){
+   const sealP=[...m.querySelectorAll('p')].find(p=>p.textContent.trim().startsWith('Seals:'));
+   if(sealP){
+    sealP.innerHTML='<b>Seals:</b> 🔴 Đỏ (tính 2 lần) · 🟡 Vàng (+$3 khi được tính) · 🔵 Lam (tạo Planet khi giữ cuối vòng) · 🟣 Tím (tạo Tarot khi Discard) · 🟠 Cam (+$2 ngay khi được tính điểm; nếu còn giữ trên tay lúc thắng Blind: 20% cơ hội nhân đôi tiền hiện có, tối đa +$20) · ⚪ Trắng (khi bị Bỏ bài: 10% cơ hội hoàn lại 1 lượt Bỏ bài)';
+   }
+  }
+ }catch(e){}
+};
+
+if(S)render();
+})();
+/* ===== ARCANUM v48: RESET TOÀN BỘ + JOKER HALLOWEEN ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.3rem';e.style.color=c||'#ff9a4a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1700);}
+
+/* ================= A. RESET TOÀN BỘ DỮ LIỆU (ván lưu, xu, thành tích, bảng điểm, mọi thứ) ================= */
+window.hardResetGame=function(){
+ try{
+  const keys=[];
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.toLowerCase().startsWith('arcanum'))keys.push(k);}
+  keys.forEach(k=>localStorage.removeItem(k));
+ }catch(e){}
+ location.reload();
+};
+// Gõ "resetall" vào ô Nhập mã ở màn chọn bộ bài để xoá sạch và nạp lại bản mới nhất
+const _acReset48=window.applyCode;
+window.applyCode=function(){
+ const inp=document.getElementById('cheatCode');const v=((inp&&inp.value)||'').trim().toLowerCase();
+ if(v==='resetall'){
+  if(confirm('⚠️ XOÁ SẠCH toàn bộ dữ liệu (ván đang lưu, Xu, Danh hiệu, Thành tích, Bộ bài đã mở khoá, Bảng điểm) và tải lại bản mới nhất?\n\nHành động này KHÔNG THỂ hoàn tác.')){
+   hardResetGame();
+  }
+  return;
+ }
+ _acReset48();
+};
+// Nút reset riêng ở màn chọn bộ bài, cho dễ bấm trên điện thoại
+const _rdsReset48=renderDeckSelect;
+renderDeckSelect=function(){
+ _rdsReset48();
+ const app=document.getElementById('app');if(!app)return;
+ const ctr=app.querySelector('.controls');
+ if(ctr&&!app.querySelector('[data-hardreset]')){
+  ctr.insertAdjacentHTML('beforeend','<button class="btn danger small" data-hardreset onclick="if(confirm(\'⚠️ XOÁ SẠCH toàn bộ dữ liệu và tải lại bản mới nhất?\\n\\nKhông thể hoàn tác.\'))hardResetGame();">🗑️ Reset Toàn Bộ (dữ liệu cũ)</button>');
+ }
+};
+
+/* ================= B. JOKER HALLOWEEN (14 lá, icon không trùng) ================= */
+const usedIcons48=new Set(Object.values(JOKERS).map(d=>d.icon));
+const SPOOKY_POOL=['🎃','🧪','🦴','🦇','🧛‍♂️','🧟','🐈‍⬛','🦉','🕷️','🕸️','😱','🍫','⚰️','🪦','🧁','🕯️','🩸','👹','👺','🐸','🌕','🖤','🪱','🔮'];
+function spookyIcon48(pref){
+ if(pref&&!usedIcons48.has(pref)){usedIcons48.add(pref);return pref;}
+ const alt=SPOOKY_POOL.find(x=>!usedIcons48.has(x));
+ const final=alt||'🎃';usedIcons48.add(final);return final;
+}
+function addH48(key,def){def.key=key;def.icon=spookyIcon48(def.icon);JOKERS[key]=def;}
+
+addH48('h48_jackLantern',{name:'Đèn Lồng Bí Ngô',icon:'🎃',cost:5,rarity:'C',
+ desc:' +10 Chip mỗi lá được tính điểm; nếu đang đánh Boss Blind (ánh sáng soi đường trong đêm tối): thêm +20 Chip.',
+ calc:c=>({chips:10*c.scoringCards.length+(c.state.blindIdx===2?20:0)})});
+
+addH48('h48_potionBrewer',{name:'Vạc Pha Chế Phù Thủy',icon:'🧪',cost:7,rarity:'U',
+ desc:' Mỗi lần Bỏ bài: 20% cơ hội biến 1 lá ngẫu nhiên trên tay thành Enhancement ngẫu nhiên (phép thuật hoá lỏng).',
+ calc:()=>({})});
+
+addH48('h48_boneRattle',{name:'Xương Lách Cách',icon:'🦴',cost:5,rarity:'C',
+ desc:' +4 Mult mỗi lá Stone được tính điểm (bộ xương trắng toát).',
+ calc:c=>({mult:4*c.scoringCards.filter(x=>x.enh==='stone').length})});
+
+addH48('h48_nightBats',{name:'Đàn Dơi Đêm',icon:'🦇',cost:7,rarity:'U',
+ desc:' Mỗi lượt Chơi bài TỪ LƯỢT THỨ 2 trở đi trong Blind: +1 Mult vĩnh viễn (dơi bay ra ngày càng nhiều khi đêm xuống).',
+ calc:c=>({mult:c.state.h48_batN||0})});
+
+addH48('h48_thirstyVampire',{name:'Ma Cà Rồng Khát Máu',icon:'🧛‍♂️',cost:8,rarity:'R',
+ desc:' Mỗi lá Cơ hoặc Rô (máu đỏ) được tính điểm: hút +$1 và +3 Mult.',
+ calc:c=>{const n=c.scoringCards.filter(x=>x.suit==='H'||x.suit==='D').length;if(n)c.state.money+=n;return{mult:3*n};}});
+
+addH48('h48_ancientMummy',{name:'Xác Ướp Cổ Đại',icon:'🧟',cost:8,rarity:'R',
+ desc:' +10 Chip mỗi lá có Edition (Foil/Holo/Poly) được tính điểm (quấn băng vải phép).',
+ calc:c=>({chips:10*c.scoringCards.filter(x=>x.edition&&x.edition!=='none').length})});
+
+addH48('h48_blackCat',{name:'Mèo Đen Xui Xẻo',icon:'🐈‍⬛',cost:6,rarity:'U',
+ desc:' Mỗi lượt Chơi bài: 13% cơ hội x2 Mult, và (độc lập) 13% cơ hội mất $1 — vận may thất thường.',
+ calc:c=>{const r={};if(Math.random()<0.13)r.xmult=2;if(Math.random()<0.13)c.state.money=Math.max(0,c.state.money-1);return r;}});
+
+addH48('h48_moonOwl',{name:'Cú Trăng Tròn',icon:'🦉',cost:7,rarity:'U',
+ desc:' +3 Mult × Ante hiện tại, CHỈ khi đang đánh Boss Blind (cú chỉ cất tiếng kêu khi trăng tròn).',
+ calc:c=>c.state.blindIdx===2?{mult:3*c.state.ante}:{}});
+
+addH48('h48_spider',{name:'Nhện Độc',icon:'🕷️',cost:5,rarity:'C',
+ desc:' +7 Chip mỗi lá Bích hoặc Chuồn (màu tơ nhện) được tính điểm.',
+ calc:c=>({chips:7*c.scoringCards.filter(x=>x.suit==='S'||x.suit==='C').length})});
+
+addH48('h48_stickyWeb',{name:'Mạng Nhện Dính',icon:'🕸️',cost:6,rarity:'U',
+ desc:' x1.4 Mult nếu chưa Bỏ bài lần nào trong vòng này (tay bài còn "dính" nguyên vẹn).',
+ calc:c=>({xmult:(c.state.roundDiscardCount||0)===0?1.4:1})});
+
+addH48('h48_screamingSoul',{name:'Linh Hồn Thét Gào',icon:'😱',cost:9,rarity:'R',
+ desc:' Nếu điểm hiện tại dưới 10% mục tiêu Blind: +45 Mult (nỗi sợ tiếp thêm sức mạnh tuyệt vọng).',
+ calc:c=>{const def=(c.state.blindScore-c.state.currentScore)/Math.max(1,c.state.blindScore);return def>=0.9?{mult:45}:{};}});
+
+addH48('h48_cursedChoco',{name:'Sô-cô-la Bị Nguyền',icon:'🍫',cost:5,rarity:'C',
+ desc:' +18 Chip mỗi lượt Chơi bài. Mỗi lượt có 1/8 khả năng bị "ăn mất" — để lại phiên bản nâng cấp trong Shop lần sau.',
+ calc:()=>({chips:18}),breakChance:1/8,upgradeTo:'h48_darkChoco'});
+addH48('h48_darkChoco',{name:'Sô-cô-la Đen Bí Ẩn',icon:'⚰️',cost:9,rarity:'R',
+ desc:' x2.3 Mult. Rất bền: chỉ 1/60 khả năng bị ăn mất mỗi lượt chơi.',
+ calc:()=>({xmult:2.3}),breakChance:1/60});
+
+addH48('h48_tombstone',{name:'Bia Mộ Cổ',icon:'🪦',cost:6,rarity:'U',
+ desc:' +1 Mult vĩnh viễn mỗi lần MỘT JOKER KHÁC của bạn biến mất (bị bán, bị phá vỡ, tự rút lui...). Cộng dồn vô hạn.',
+ calc:c=>({mult:c.state.h48_tombN||0})});
+
+addH48('h48_candleWitch',{name:'Nến Phù Thủy',icon:'🕯️',cost:6,rarity:'U',
+ desc:' +6 Mult nếu đang có từ 3 lượt Bỏ bài còn lại trở lên (ngọn nến còn cháy lâu).',
+ calc:c=>c.state.discardsLeft>=3?{mult:6}:{}});
+
+addH48('h48_spookyCupcake',{name:'Bánh Ma Quái',icon:'🧁',cost:5,rarity:'C',
+ desc:' Khi mua: Trick or Treat! 50% nhận ngay +$6, 50% nhận ngay 1 Joker Thường miễn phí (nếu còn chỗ).',
+ calc:()=>({})});
+
+/* ================= C. HOOK CƠ CHẾ CHO CÁC LÁ HALLOWEEN ================= */
+// Vạc Pha Chế Phù Thủy: Bỏ bài có cơ hội biến phép 1 lá
+const _ds48=discardSelected;
+discardSelected=function(){
+ const active=S&&S.phase==='playing'&&S.selected.length>0&&S.discardsLeft>0&&has('h48_potionBrewer');
+ _ds48();
+ if(active&&Math.random()<0.2&&S.hand.length){
+  const c=pick(S.hand);c.enh=pick(['bonus','mult','glass','steel','gold','lucky','wild']);
+  const f=S.fullDeck.find(x=>x.id===c.id);if(f)f.enh=c.enh;
+  say('🧪 Vạc Phù Thủy: 1 lá nhận Enhancement phép thuật!','#c9a0ff');render();
+ }
+};
+// Đàn Dơi Đêm: đếm lượt chơi trong Blind (bỏ qua lượt đầu tiên)
+const _sb48=setupBlind;
+setupBlind=function(){_sb48();S.h48_batN=0;};
+const _fs48=finalizeScore;
+finalizeScore=function(b){
+ if(has('h48_nightBats')&&S.handsLeft<S.baseHands)S.h48_batN=(S.h48_batN||0)+1;
+ _fs48(b);
+};
+// Bia Mộ Cổ: đếm Joker khác biến mất (bán hoặc tự rút lui/vỡ)
+const _sj48=sellJoker;
+sellJoker=function(u){
+ const wasTomb=has('h48_tombstone');const j=S.jokers.find(x=>x.uid===u);
+ _sj48(u);
+ if(wasTomb&&j&&j.key!=='h48_tombstone')S.h48_tombN=(S.h48_tombN||0)+1;
+};
+const _fsBreak48=finalizeScore;
+finalizeScore=function(b){
+ const before=S.jokers.length;
+ _fsBreak48(b);
+ if(has('h48_tombstone')&&S.jokers.length<before)S.h48_tombN=(S.h48_tombN||0)+(before-S.jokers.length);
+};
+// Bánh Ma Quái: hiệu ứng Trick-or-Treat khi mua
+const _bj48=buyJoker;
+buyJoker=function(idx){
+ const offer=S.shopOffers&&S.shopOffers.jokers[idx];const before=S.jokers.length;
+ _bj48(idx);
+ if(offer&&offer.key==='h48_spookyCupcake'&&S.jokers.length>before){
+  if(Math.random()<0.5){S.money+=6;say('🧁 Trick or Treat: +$6!','#ffd76a');}
+  else if(activeJokerCount(S)<S.maxJokerSlots){
+   const k=pick(Object.keys(JOKERS).filter(x=>JOKERS[x].rarity==='C'));
+   S.jokers.push({uid:uid(),key:k,edition:'none'});
+   say('🧁 Trick or Treat: nhận thêm '+JOKERS[k].name+'!','#ffd76a');
+  } else {S.money+=6;say('🧁 Hết chỗ → +$6 thay thế!','#ffd76a');}
+  render();
+ }
+};
+
+if(S)render();else renderDeckSelect();
 })();
 </script>
 
