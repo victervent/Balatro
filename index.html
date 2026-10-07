@@ -5439,10 +5439,15 @@ buildScoreSteps=function(p){
   } else if(c.edition==='cursed'){
    const before=b.chips;b.chips=Math.max(0,b.chips-40);b.mult*=2;dirty=true;
    b.steps.push({label:'💀 Cursed',chipDelta:b.chips-before,multDelta:0,multMulti:2,targetSel:`[data-cid="${c.id}"]`,floatText:'-40 x2✦',floatColor:'#ff4d6a',delay:170});
-  } else if(c.edition==='radiant'&&Math.random()<0.15){
-   let cc=rankChips(c.rank);if(c.enh==='bonus')cc+=30;if(c.enh==='stone')cc=50;if(c.enh==='wild')cc+=10;
-   b.chips+=cc;dirty=true;
-   b.steps.push({label:'🌟 Radiant — kích hoạt lại!',chipDelta:cc,multDelta:0,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:'+'+cc+' (x2!)',floatColor:'#fff3b0',delay:170});
+  } else if(c.edition==='radiant'){
+   if(Math.random()<0.35){
+    let cc=rankChips(c.rank);if(c.enh==='bonus')cc+=30;if(c.enh==='stone')cc=50;if(c.enh==='wild')cc+=10;
+    b.chips+=cc;dirty=true;
+    b.steps.push({label:'🌟 Radiant — kích hoạt lại!',chipDelta:cc,multDelta:0,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:'+'+cc+' (x2!)',floatColor:'#fff3b0',delay:170});
+   } else {
+    b.mult+=3;dirty=true;
+    b.steps.push({label:'🌟 Radiant — không trúng',chipDelta:0,multDelta:3,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:'+3✦',floatColor:'#fff3b0',delay:170});
+   }
   }
  });
  if(dirty)b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));
@@ -7534,6 +7539,141 @@ buyJoker=function(idx){
    say('🧁 Trick or Treat: nhận thêm '+JOKERS[k].name+'!','#ffd76a');
   } else {S.money+=6;say('🧁 Hết chỗ → +$6 thay thế!','#ffd76a');}
   render();
+ }
+};
+
+if(S)render();else renderDeckSelect();
+})();
+/* ===== ARCANUM v50: SỬA RETRIGGER CHO CURSE/PRISMATIC/RADIANT + SỬA BOSS THE VOID + HIỆN 3 EDITION TRONG THƯ VIỆN + Ô BỘ BÀI YÊU THÍCH ===== */
+(function(){
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.3rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1600);}
+
+/* ================= A. RETRIGGER GIỜ ÁP DỤNG ĐÚNG CHO CURSE / PRISMATIC / RADIANT ================= */
+const RADIANT_CHANCE=0.35;
+function radiantRoll(c,b,tagSel){
+ if(Math.random()<RADIANT_CHANCE){
+  let cc=rankChips(c.rank);if(c.enh==='bonus')cc+=30;if(c.enh==='stone')cc=50;if(c.enh==='wild')cc+=10;
+  b.chips+=cc;
+  return{label:'🌟 Radiant (Retrigger) — kích hoạt lại!',chipDelta:cc,multDelta:0,multMulti:1,targetSel:tagSel,floatText:'+'+cc,floatColor:'#fff3b0',delay:170};
+ }
+ b.mult+=3;
+ return{label:'🌟 Radiant (Retrigger) — không trúng',chipDelta:0,multDelta:3,multMulti:1,targetSel:tagSel,floatText:'+3✦',floatColor:'#fff3b0',delay:170};
+}
+const _bssEdRT50=buildScoreSteps;
+buildScoreSteps=function(played){
+ const b=_bssEdRT50(played);
+ try{
+  const extra=[];
+  (b.steps||[]).forEach(st=>{
+   if(!st.label||st.label.indexOf('(Retrigger)')<0||!st.targetSel)return;
+   const m=st.targetSel.match(/data-cid="([^"]+)"/);if(!m)return;
+   const card=(b.scoring||[]).find(c=>c.id===m[1]);if(!card||!card.edition||card.edition==='none')return;
+   if(card.edition==='cursed'){
+    b.chips=Math.max(0,b.chips-40);b.mult*=2;
+    extra.push({label:'💀 Cursed (Retrigger)',chipDelta:-40,multDelta:0,multMulti:2,targetSel:st.targetSel,floatText:'-40 x2✦',floatColor:'#ff4d6a',delay:170});
+   } else if(card.edition==='prismatic'){
+    b.chips+=25;b.mult+=5;
+    extra.push({label:'🔷 Prismatic (Retrigger)',chipDelta:25,multDelta:5,multMulti:1,targetSel:st.targetSel,floatText:'+25 +5✦',floatColor:'#7fe3ff',delay:170});
+   } else if(card.edition==='radiant'){
+    extra.push(radiantRoll(card,b,st.targetSel));
+   }
+  });
+  if(extra.length){b.steps.push(...extra);b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));}
+ }catch(e){console.error('Retrigger Edition lỗi:',e);}
+ return b;
+};
+
+/* ================= B. SỬA BOSS "THE VOID" (giờ chặn TOÀN BỘ Joker ở lượt chơi đầu tiên, không chỉ hiệu ứng calc() cơ bản) ================= */
+function voidActive(){
+ return!!(S&&S.boss&&String(S.boss.key).replace('_off_','')==='void'&&S.handsLeft===S.roundHandsTotal&&!S.jokers.some(j=>j.key==='chicot'));
+}
+function withVoidHidden(fn){
+ return function(){
+  if(!voidActive())return fn.apply(null,arguments);
+  const saved=S.jokers;S.jokers=[];
+  try{return fn.apply(null,arguments);}finally{S.jokers=saved;}
+ };
+}
+buildScoreSteps=withVoidHidden(buildScoreSteps);
+finalizeScore=withVoidHidden(finalizeScore);
+
+/* ================= C. HIỆN 3 EDITION MỚI TRONG THƯ VIỆN (tab "🧪 Thuộc Tính Lá") ================= */
+const EDD_NEW50={
+ prismatic:{n:'Prismatic',icon:'🔷',d:'+25 Chip, +5 Mult khi lá này được tính điểm.',cls:'ed-prismatic'},
+ cursed:{n:'Cursed',icon:'💀',d:'-40 Chip, x2 Mult khi lá này được tính điểm.',cls:'ed-cursed'},
+ radiant:{n:'Radiant',icon:'🌟',d:(Math.round(RADIANT_CHANCE*100))+'% kích hoạt lại Chip của lá; nếu không trúng thì +3 Mult.',cls:'ed-radiant'},
+};
+function miniCard50(cardCls){return `<div class="card ${cardCls} black" style="width:56px;height:76px;margin:0 auto 4px;position:static;transform:none;"><div class="rank">A</div><div class="suit">♠</div><div class="rank bottom">A</div></div>`;}
+const _rlEd50=renderLibraryModal;
+renderLibraryModal=function(){
+ _rlEd50();
+ const m=document.getElementById('libraryModal');if(!m)return;
+ if(libraryTab!=='enh')return;
+ const headers=[...m.querySelectorAll('.lib-rarity-h')];
+ const edH=headers.find(h=>h.textContent.indexOf('EDITION')>=0);
+ if(!edH)return;
+ const grid=edH.nextElementSibling;
+ if(!grid||grid.dataset.v50)return;
+ grid.dataset.v50='1';
+ Object.values(EDD_NEW50).forEach(d=>{
+  grid.insertAdjacentHTML('beforeend',`<div class="lib-item">${miniCard50(d.cls)}<div class="lib-name">${d.icon} ${d.n}</div><div class="lib-desc">${d.d}</div></div>`);
+ });
+};
+
+/* ================= D. Ô "BỘ BÀI YÊU THÍCH" — GHIM 1 BỘ BÀI + ĐẶT TÊN RIÊNG ================= */
+const FAV_LS='arcanumFavDeckV1';
+function loadFav(){try{return Object.assign({key:null,name:''},JSON.parse(localStorage.getItem(FAV_LS)));}catch(e){return{key:null,name:''};}}
+function saveFav(f){try{localStorage.setItem(FAV_LS,JSON.stringify(f));}catch(e){}}
+let FAV=loadFav();
+window.pinFavDeck=function(key,ev){
+ if(ev)ev.stopPropagation();
+ FAV.key=(FAV.key===key)?null:key;
+ if(FAV.key&&!FAV.name)FAV.name=DECKS[FAV.key].name;
+ if(!FAV.key)FAV.name='';
+ saveFav(FAV);renderDeckSelect();
+};
+window.renameFavDeck=function(val){FAV.name=val.slice(0,24);saveFav(FAV);};
+window.unpinFavDeck=function(){FAV.key=null;FAV.name='';saveFav(FAV);renderDeckSelect();};
+const _rdsFav50=renderDeckSelect;
+renderDeckSelect=function(){
+ _rdsFav50();
+ const app=document.getElementById('app');if(!app)return;
+ const h1=app.querySelector('h1');if(!h1)return;
+ app.querySelectorAll('.pack-card').forEach(card=>{
+  if(card.dataset.favRdy)return;card.dataset.favRdy='1';
+  const nameEl=card.querySelector('.pnm');if(!nameEl)return;
+  const keyEntry=Object.entries(DECKS).find(([k,d])=>d.name===nameEl.textContent);
+  if(!keyEntry)return;const k=keyEntry[0];
+  if(!ACH.unlocked.includes(k))return;
+  const star=document.createElement('button');
+  star.textContent=FAV.key===k?'⭐':'☆';
+  star.title='Ghim làm bộ bài yêu thích';
+  star.style.cssText='position:absolute;top:6px;right:6px;background:none;border:none;font-size:1.1rem;cursor:pointer;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));';
+  star.onclick=(ev)=>window.pinFavDeck(k,ev);
+  card.style.position='relative';
+  card.appendChild(star);
+ });
+ if(!app.querySelector('.fav-deck-box')){
+  const box=document.createElement('div');box.className='fav-deck-box';
+  box.style.cssText='max-width:420px;margin:0 auto 14px;padding:10px 14px;border:1px solid var(--panel-edge);border-radius:12px;background:rgba(0,0,0,.25);text-align:center;';
+  if(FAV.key&&DECKS[FAV.key]&&ACH.unlocked.includes(FAV.key)){
+   const d=DECKS[FAV.key];
+   box.innerHTML=`<div style="font-size:.72rem;color:var(--text-lo);margin-bottom:4px;">⭐ BỘ BÀI YÊU THÍCH</div>
+    <div style="font-size:1.6rem;">${d.icon}</div>
+    <input id="favNameInput" maxlength="24" value="${(FAV.name||d.name).replace(/"/g,'&quot;')}" style="width:100%;text-align:center;background:transparent;border:none;border-bottom:1px dashed var(--panel-edge);color:var(--gold);font-family:var(--font-display);font-weight:800;font-size:1rem;padding:2px 0;margin:4px 0;">
+    <div class="controls" style="margin-top:6px;justify-content:center;gap:6px;">
+     <button class="btn small" onclick="startWithDeck('${FAV.key}')">▶ Chơi ngay</button>
+     <button class="btn secondary small" onclick="unpinFavDeck()">✕ Bỏ ghim</button>
+    </div>`;
+   h1.insertAdjacentElement('afterend',box);
+   const inp=document.getElementById('favNameInput');
+   if(inp)inp.oninput=e=>window.renameFavDeck(e.target.value);
+  } else {
+   box.style.color='var(--text-lo)';box.style.fontSize='.78rem';
+   box.textContent='Chưa có bộ bài yêu thích — bấm ☆ trên 1 bộ bài bên dưới để ghim.';
+   h1.insertAdjacentElement('afterend',box);
+  }
  }
 };
 
