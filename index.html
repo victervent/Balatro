@@ -6978,7 +6978,7 @@
   patchwork46:{name:'Mảnh Ghép Vá',icon:'🧵',cost:6,rarity:'U',desc:' +4 Mult mỗi LOẠI Enhancement khác nhau có trong lá được tính (tối đa 5 loại).',calc:c=>({mult:4*new Set(c.scoringCards.filter(x=>x.enh&&x.enh!=='none').map(x=>x.enh)).size})},
   graveRobber46:{name:'Trộm Mộ',icon:'⚰️',cost:7,rarity:'U',desc:' +3 Mult mỗi lá đã bị phá hủy vĩnh viễn khỏi bộ bài trong ván (Hanged Man, Tiệm Tỉa...).',calc:c=>({mult:3*(c.state.destroyedCount||0)})},
   soloFlight46:{name:'Chuyến Bay Đơn Độc',icon:'🕊️',cost:8,rarity:'R',desc:' x3 Mult nếu bạn chỉ sở hữu đúng 1 Joker (kể cả chính nó).',calc:c=>c.state.jokers.length===1?{xmult:3}:{}},
-  grandFinale46:{name:'Màn Kết Hoành Tráng',icon:'🎆',cost:12,rarity:'L',desc:' Lượt Chơi bài CUỐI CÙNG của Blind: x2.5 Mult VÀ +200 Chip.',calc:c=>c.state.handsLeft===1?{xmult:2.5,chips:200}:{}},
+  grandFinale46:{name:'Màn Kết Hoành Tráng',icon:'🎆',cost:12,rarity:'R',desc:' Lượt Chơi bài CUỐI CÙNG của Blind: x2.5 Mult VÀ +100 Chip.',calc:c=>c.state.handsLeft===1?{xmult:2.5,chips:100}:{}},
   };
   Object.entries(NEW46).forEach(([k,d])=>{d.key=k;JOKERS[k]=d;});
 
@@ -8337,6 +8337,694 @@ renderDeckSelect=function(){
 })();
 
 if(!S)renderDeckSelect();
+})();
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const ZK=['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces'];
+const _opFinal51=openPack;
+openPack=function(kind){
+  const ex=S?(S.zodExtra||0):0;
+  if(S)S.zodExtra=0;
+  _opFinal51(kind);
+  if(!(ex>0&&S&&S.packPicking&&Array.isArray(S.packPicking.options)))return;
+  const pk=S.packPicking,k=pk.kind,opts=pk.options;
+  const used=new Set(opts.map(o=>o.type+':'+(o.key||'')));
+  let added=0,guard=0;
+  while(added<ex&&guard++<80){
+    let o=null;
+    if(k==='tarot'||k==='mega_tarot')o={type:'tarot',key:randKey(TAROTS)};
+    else if(k==='planet')o={type:'planet',key:randKey(PLANETS)};
+    else if(k==='spectral')o={type:'spectral',key:randKey(SPECTRALS)};
+    else if(k==='card'){opts.push({type:'card',card:randomStandardCard()});added++;continue;}
+    else if(k==='zodiac'||k==='zodiacGrand')o={type:k,key:pick(ZK)};
+    if(!o)break;
+    const id=o.type+':'+o.key;
+    if(used.has(id))continue;
+    used.add(id);opts.push(o);added++;
+  }
+  render();
+};
+})();
+/* ===== ARCANUM v57: LEGENDARY TĂNG TRƯỞNG VÔ HẠN ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const has=k=>!!(S&&S.jokers&&S.jokers.some(j=>j.key===k));
+function say(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.3rem';e.style.color=c||'#f0b84b';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),1700);}
+const safe=f=>c=>{try{return f(c)||{};}catch(e){return{};}};
+
+const L={
+ l56_phoenixKing:{name:'Phượng Hoàng Bất Diệt',icon:'🦅',cost:30,
+  desc:'x1.5 Mult, +x0.15 mỗi Blind thắng, +x0.5 mỗi lần hồi sinh (vô hạn). Khi thua: hồi sinh với +2 lượt Chơi bài, 1 lần MỖI ANTE.',
+  calc:c=>({xmult:1.5+0.15*(c.state.l57_phxWins||0)+0.5*(c.state.l57_phx||0)})},
+ l56_goldenGod:{name:'Thần Tài Vàng',icon:'🧞',cost:30,
+  desc:'x(1 + $tiền/100), KHÔNG giới hạn. Thắng Blind: +$5 và +25% số tiền đang có (trần tăng theo Ante: $10 × Ante). Giàu càng nhanh càng mạnh.',
+  calc:c=>({xmult:1+Math.max(0,c.state.money)/100})},
+ l56_cardEater:{name:'Quỷ Ăn Bài',icon:'👹',cost:30,
+  desc:'Mỗi lá bị Bỏ bài bị ăn vĩnh viễn khỏi bộ bài (dừng khi còn 24 lá). Mỗi lá ăn được: +0.6 Mult và +x0.01 Mult vĩnh viễn (vô hạn).',
+  calc:c=>{const n=c.state.l56_eaten||0;return{mult:Math.round(0.6*n*10)/10,xmult:1+0.01*n};}},
+ l56_starLord:{name:'Chúa Tể Chòm Sao',icon:'🌠',cost:32,
+  desc:'x1.4 mỗi HỆ Hoàng Đạo đã dùng, và x(1+0.05 × tổng số lần dùng cung) — vô hạn. Hạ Boss: tặng 1 cung Hoàng Đạo ngẫu nhiên (nếu còn chỗ).',
+  calc:c=>{const z=c.state.zEl||{};const n=Object.keys(z).filter(k=>k!=='void'&&z[k]>0).length;const t=Object.values(z).reduce((a,b)=>a+b,0);return{xmult:Math.pow(1.4,n)*(1+0.05*t)};}},
+ l56_dragonSlayer:{name:'Kỵ Sĩ Diệt Rồng',icon:'🗡️',cost:30,
+  desc:'Mỗi Boss đã hạ: +x0.5 khi đánh Boss, +x0.1 ở Blind thường (vô hạn). Gốc: x4 ở Boss, x1.5 ở Blind thường.',
+  calc:c=>{const k=c.state.l57_slain||0;return{xmult:c.state.blindIdx===2?4+0.5*k:1.5+0.1*k};}},
+ l56_chaosGod:{name:'Thần Hỗn Mang',icon:'🎭',cost:28,
+  desc:'Mỗi lượt chơi ngẫu nhiên 1 trong 4: x3 Mult / +80 Mult / +400 Chip / x2 Mult + $10. Mọi kết quả mạnh thêm 3% mỗi lượt đã chơi trong ván (vô hạn).',
+  calc:c=>{const s=1+0.03*(c.state.totalHandsPlayed||0),r=Math.random();
+   if(r<.25)return{xmult:1+2*s};
+   if(r<.5)return{mult:Math.round(80*s)};
+   if(r<.75)return{chips:Math.round(400*s)};
+   c.state.money+=10;return{xmult:1+s};}},
+ l56_worldTree:{name:'Cây Thế Giới',icon:'🌳',cost:30,
+  desc:'+x0.2 Mult vĩnh viễn mỗi Blind thắng, +x0.5 nếu là Boss (cộng dồn vô hạn).',
+  calc:c=>({xmult:1+(c.state.l56_tree||0)})},
+ l57_collector:{name:'Kẻ Thu Thập Vô Tận',icon:'🏛️',cost:30,
+  desc:'Mỗi Blind thắng: thêm 1 bản sao của 1 lá ngẫu nhiên vào bộ bài (tối đa 120 lá). x(1 + 0.015 × số lá vượt quá 52).',
+  calc:c=>({xmult:1+0.015*Math.max(0,c.state.fullDeck.length-52)})},
+ l57_meteor:{name:'Thiên Thạch Tiến Hóa',icon:'☄️',cost:32,
+  desc:'Mỗi lượt Chơi bài: 1 loại bài NGẪU NHIÊN tự +1 cấp (không giới hạn). x(1 + 0.04 × số lần nâng cấp).',
+  calc:c=>({xmult:1+0.04*(c.state.l57_meteor||0)})},
+};
+Object.entries(L).forEach(([k,d])=>{d.key=k;d.rarity='L';d.calc=safe(d.calc);JOKERS[k]=d;});
+
+// chống trùng icon
+{const seen=new Set();const SPARE=['🧿','🪽','🌄','🏯','⛩️','🎑','🔰','🛕','🗽','🧜‍♀️','🔱','⚜️'];
+ Object.entries(JOKERS).forEach(([k,d])=>{if(!seen.has(d.icon)){seen.add(d.icon);return;}if(k.startsWith('l5')){const a=SPARE.find(x=>!seen.has(x));if(a){d.icon=a;seen.add(a);}}});}
+
+/* ---- Phượng Hoàng: hồi sinh 1 lần / Ante ---- */
+const _r=render;
+render=function(){
+ if(S&&S.phase==='gameover'&&has('l56_phoenixKing')&&S.l57_phxAnte!==S.ante){
+  S.l57_phxAnte=S.ante;S.l57_phx=(S.l57_phx||0)+1;
+  S.handsLeft=2;S.phase='playing';
+  S.message='🦅 Phượng Hoàng hồi sinh! +2 lượt (lần '+S.l57_phx+')';
+  say('🦅 PHƯỢNG HOÀNG BẤT DIỆT!','#ffb37a');
+ }
+ _r();
+};
+
+/* ---- Thắng Blind: Phượng Hoàng / Thần Tài / Cây Thế Giới / Kỵ Sĩ / Chòm Sao / Thu Thập ---- */
+const _wb=winBlind;
+winBlind=function(){
+ const boss=S.blindIdx===2;
+ _wb();
+ if(!S)return;
+ if(has('l56_phoenixKing'))S.l57_phxWins=(S.l57_phxWins||0)+1;
+ if(has('l56_worldTree'))S.l56_tree=(S.l56_tree||0)+(boss?0.5:0.2);
+ if(boss&&has('l56_dragonSlayer'))S.l57_slain=(S.l57_slain||0)+1;
+ if(has('l56_goldenGod')){
+  const add=5+Math.min(10*S.ante,Math.floor(Math.max(0,S.money)*0.25));
+  S.money+=add;S.lastReward=(S.lastReward||0)+add;
+  say('🧞 Thần Tài: +$'+add,'#ffd76a');
+ }
+ if(boss&&has('l56_starLord')){
+  S.zodiacs=S.zodiacs||[];
+  if(S.zodiacs.length<(S.maxZodiac||2)){
+   const k=pick(['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces']);
+   S.zodiacs.push({uid:uid(),key:k});say('🌠 Chúa Tể Chòm Sao tặng 1 cung Hoàng Đạo!','#9be7ff');
+  }
+ }
+ if(has('l57_collector')&&S.fullDeck.length<120&&S.fullDeck.length){
+  S.fullDeck.push({...pick(S.fullDeck),id:uid()});say('🏛️ Thu thập thêm 1 lá bài!','#c9a0ff');
+ }
+ render();
+};
+
+/* ---- Quỷ Ăn Bài: ăn lá bị Bỏ ---- */
+const _ds=discardSelected;
+discardSelected=function(){
+ const ok=S&&S.phase==='playing'&&S.selected.length>0&&S.discardsLeft>0&&has('l56_cardEater');
+ const ids=ok?[...S.selected]:[];
+ _ds();
+ if(ok){
+  let n=0;
+  ids.forEach(id=>{if(S.fullDeck.length>24){S.fullDeck=S.fullDeck.filter(c=>c.id!==id);n++;}});
+  if(n){S.l56_eaten=(S.l56_eaten||0)+n;say('👹 Quỷ Ăn Bài nuốt '+n+' lá! (+'+(0.6*n).toFixed(1)+' Mult)','#ff9a9a');}
+ }
+};
+
+/* ---- Thiên Thạch: nâng cấp loại bài ngẫu nhiên mỗi lượt chơi ---- */
+const _fs=finalizeScore;
+finalizeScore=function(b){
+ _fs(b);
+ if(S&&has('l57_meteor')){
+  const k=pick(Object.keys(S.handLevels).filter(x=>x!=='ALL'));
+  S.handLevels[k]=(S.handLevels[k]||1)+1;S.l57_meteor=(S.l57_meteor||0)+1;
+  say('☄️ '+HAND_TYPES[k].name+' → cấp '+S.handLevels[k],'#7fe3ff');
+ }
+};
+
+if(S)render();
+})();
+/* ===== ARCANUM v55: TINH THÔNG CHẤT/BẬC (Suit/Rank Mastery) + KINH DỊCH (8 Quẻ Bát Quái) ===== */
+(function(){
+/* ---- CHỈNH SỐ Ở ĐÂY NẾU MUỐN CÂN BẰNG LẠI ---- */
+const CHIP_PER_LEVEL=5;      // mỗi cấp Tinh Thông cộng bao nhiêu Chip
+const MULT_THRESHOLD=5;      // từ cấp mấy bắt đầu cộng thêm Mult
+const MULT_PER_LEVEL=2;      // mỗi cấp vượt ngưỡng cộng bao nhiêu Mult
+const MASTERY_PACK_BASE=0.18,MASTERY_PACK_COST=7;
+const DIVINATION_PACK_BASE=0.15,DIVINATION_PACK_COST=9;
+
+function say55(t,c){const e=document.createElement('div');e.className='callout';e.style.fontSize='1.2rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2000);}
+function masteryBonus55(level){const chip=CHIP_PER_LEVEL*level;const mult=level>MULT_THRESHOLD?MULT_PER_LEVEL*(level-MULT_THRESHOLD):0;return{chip,mult};}
+
+/* ================= A. DỮ LIỆU: 17 lá Tinh Thông (4 Chất + 13 Bậc) ================= */
+const MASTERY_CARDS={};
+Object.keys(SUITS).forEach(s=>{MASTERY_CARDS['mSuit_'+s]={name:'Tinh Thông '+SUITS[s].name,icon:SUITS[s].sym,kind:'suit',target:s};});
+RANK_ORDER.forEach(r=>{MASTERY_CARDS['mRank_'+r]={name:'Tinh Thông Bậc '+rankLabel(r),icon:'🔢',kind:'rank',target:r};});
+
+/* ================= B. DỮ LIỆU: 8 Quẻ Kinh Dịch ================= */
+const DIVINATION={
+ qCan:{name:'Quẻ Càn (Trời)',icon:'☰',desc:'Rủi ro: Blind kế tiếp +15% điểm mục tiêu. Thưởng nếu thắng: +$20.',
+  risk:st=>{st.blindScore=Math.round(st.blindScore*1.15);},reward:st=>{st.money+=20;return'+$20';}},
+ qKhon:{name:'Quẻ Khôn (Đất)',icon:'☷',desc:'Rủi ro: -1 lượt Bỏ bài Blind kế tiếp. Thưởng nếu thắng: +1 Discard vĩnh viễn.',
+  risk:st=>{st.discardsLeft=Math.max(0,st.discardsLeft-1);},reward:st=>{st.baseDiscards+=1;st.discardsLeft+=1;return'+1 Discard vĩnh viễn';}},
+ qChan:{name:'Quẻ Chấn (Sấm)',icon:'☳',desc:'Rủi ro: -1 lượt Chơi bài Blind kế tiếp. Thưởng nếu thắng: 1 loại bài ngẫu nhiên +2 cấp.',
+  risk:st=>{st.handsLeft=Math.max(1,st.handsLeft-1);},
+  reward:st=>{const k=randKey(HAND_TYPES);if(k==='ALL')return'';st.handLevels[k]=(st.handLevels[k]||1)+2;return HAND_TYPES[k].name+' +2 cấp';}},
+ qTon:{name:'Quẻ Tốn (Gió)',icon:'☴',desc:'Rủi ro: Cỡ bài trên tay Blind kế tiếp -1. Thưởng nếu thắng: +1 cỡ bài vĩnh viễn.',
+  risk:st=>{st.handSize=Math.max(4,st.handSize-1);},
+  reward:st=>{st.baseHandSize+=1;st.handSize+=1;return'+1 cỡ bài vĩnh viễn';}},
+ qKham:{name:'Quẻ Khảm (Nước)',icon:'☵',desc:'Rủi ro: Mất ngay $6 khi vào Blind kế tiếp. Thưởng nếu thắng: +$25.',
+  risk:st=>{st.money=Math.max(0,st.money-6);},reward:st=>{st.money+=25;return'+$25';}},
+ qLy:{name:'Quẻ Ly (Lửa)',icon:'☲',desc:'Rủi ro: Blind kế tiếp +25% điểm mục tiêu. Thưởng nếu thắng: 1 Joker Thường miễn phí (hoặc +$8 nếu hết chỗ).',
+  risk:st=>{st.blindScore=Math.round(st.blindScore*1.25);},
+  reward:st=>{if(activeJokerCount(st)<st.maxJokerSlots){const pool=Object.keys(JOKERS).filter(x=>JOKERS[x].rarity==='C');const k=pool[Math.floor(Math.random()*pool.length)];st.jokers.push({uid:uid(),key:k,edition:'none'});return'Joker '+JOKERS[k].name;}st.money+=8;return'+$8 (hết chỗ)';}},
+ qCan2:{name:'Quẻ Cấn (Núi)',icon:'☶',desc:'Rủi ro: Mất ngay $4 khi vào Blind kế tiếp. Thưởng nếu thắng: +1 Tarot ngẫu nhiên (hoặc +$5 nếu hết chỗ).',
+  risk:st=>{st.money=Math.max(0,st.money-4);},
+  reward:st=>{if(st.consumables.length<st.maxConsumableSlots){const k=randKey(TAROTS);st.consumables.push({uid:uid(),type:'tarot',key:k});return'Tarot '+TAROTS[k].name;}st.money+=5;return'+$5 (hết chỗ)';}},
+ qDoai:{name:'Quẻ Đoài (Hồ)',icon:'☱',desc:'Rủi ro: Blind kế tiếp +10% điểm mục tiêu. Thưởng nếu thắng: +1 Planet ngẫu nhiên (hoặc +$6 nếu hết chỗ).',
+  risk:st=>{st.blindScore=Math.round(st.blindScore*1.1);},
+    reward:st=>{if(st.consumables.length<st.maxConsumableSlots){const k=randKey(PLANETS);st.consumables.push({uid:uid(),type:'planet',key:k});return'Planet '+PLANETS[k].name;}st.money+=6;return'+$6 (hết chỗ)';}},
+};
+window.DIVINATION55=DIVINATION;
+
+/* ================= C. GÓI (Pack) + VOUCHER mới ================= */
+PACKS.masteryPack={name:'Gói Tinh Thông',icon:'🧭',cost:MASTERY_PACK_COST,kind:'mastery',desc:'Chọn 1 trong 3 lá Tinh Thông Chất/Bậc — nâng cấp VĨNH VIỄN, không giới hạn.'};
+PACKS.divinationPack={name:'Kinh Dịch Pack',icon:'☯️',cost:DIVINATION_PACK_COST,kind:'divination',desc:'Chọn 1 trong 3 quẻ Kinh Dịch — đánh đổi rủi ro lấy phần thưởng.'};
+VOUCHERS.masteryScholar={name:'Học Giả Tinh Thông',icon:'🧭',cost:11,desc:'Gói Tinh Thông xuất hiện thường xuyên hơn (+10%/lần sở hữu), giảm 30% giá Gói Tinh Thông.',apply:st=>{st.masteryBoost=(st.masteryBoost||0)+1;st.masteryDiscount=true;}};
+VOUCHERS.divinationMaster={name:'Thầy Bói Kinh Dịch',icon:'☯️',cost:12,desc:'Gói Kinh Dịch xuất hiện thường xuyên hơn (+10%/lần sở hữu), giảm 30% giá Gói Kinh Dịch.',apply:st=>{st.divinationBoost=(st.divinationBoost||0)+1;st.divinationDiscount=true;}};
+
+/* ================= D. KHỞI TẠO STATE KHI VÀO VÁN MỚI ================= */
+const _ng55=newGame;
+newGame=function(k){
+ _ng55(k);
+ if(k&&S){
+  S.suitMastery=S.suitMastery||{S:0,H:0,D:0,C:0};
+  S.rankMastery=S.rankMastery||{};
+  S.pendingDivinationQueued=S.pendingDivinationQueued||[];
+  S.pendingDivinationActive=S.pendingDivinationActive||[];
+  render();
+ }
+};
+
+/* ================= E. TÍNH ĐIỂM: ÁP DỤNG BONUS TINH THÔNG ================= */
+const _bss55=buildScoreSteps;
+buildScoreSteps=function(played){
+ const b=_bss55(played);
+ try{
+  if(!S.suitMastery)S.suitMastery={S:0,H:0,D:0,C:0};
+  if(!S.rankMastery)S.rankMastery={};
+  const eff=(b.scoring||[]).filter(c=>!(S.debuffSuit&&c.suit===S.debuffSuit&&c.enh!=='wild')&&!(S.plantDebuff&&c.rank>=11&&c.rank<=13&&c.enh!=='wild'));
+  let dirty=false;
+  eff.forEach(c=>{
+   const sl=S.suitMastery[c.suit]||0;
+   if(sl>0){
+    const{chip,mult}=masteryBonus55(sl);
+    b.chips+=chip;b.mult+=mult;dirty=true;
+    b.steps.push({label:SUITS[c.suit].sym+' Tinh Thông Lv.'+sl,chipDelta:chip,multDelta:mult,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:(chip?'+'+chip:'')+(mult?' +'+mult+'✦':''),floatColor:'#f0b84b',delay:140});
+   }
+   const rl=S.rankMastery[c.rank]||0;
+   if(rl>0){
+    const{chip,mult}=masteryBonus55(rl);
+    b.chips+=chip;b.mult+=mult;dirty=true;
+    b.steps.push({label:rankLabel(c.rank)+' Tinh Thông Lv.'+rl,chipDelta:chip,multDelta:mult,multMulti:1,targetSel:`[data-cid="${c.id}"]`,floatText:(chip?'+'+chip:'')+(mult?' +'+mult+'✦':''),floatColor:'#9be7ff',delay:150});
+   }
+  });
+  if(dirty)b.total=Math.round(Math.max(0,b.chips)*Math.max(1,b.mult));
+ }catch(e){console.error('Mastery lỗi:',e);}
+ return b;
+};
+
+/* ================= F. MỞ GÓI / CHỌN LÁ ================= */
+const _op55=openPack;
+openPack=function(kind){
+ if(kind==='mastery'){
+  const pool=Object.keys(MASTERY_CARDS),opts=[],chosen=new Set();
+  while(opts.length<3&&chosen.size<pool.length){const k=pool[Math.floor(Math.random()*pool.length)];if(chosen.has(k))continue;chosen.add(k);opts.push({type:'mastery',key:k});}
+  S.packPicking={options:opts,kind:'mastery'};render();return;
+ }
+ if(kind==='divination'){
+  const pool=Object.keys(DIVINATION),opts=[],chosen=new Set();
+  while(opts.length<3&&chosen.size<pool.length){const k=pool[Math.floor(Math.random()*pool.length)];if(chosen.has(k))continue;chosen.add(k);opts.push({type:'divination',key:k});}
+  S.packPicking={options:opts,kind:'divination'};render();return;
+ }
+ _op55(kind);
+};
+const _rpp55=renderPackPicking;
+renderPackPicking=function(){
+ if(S.packPicking.kind==='mastery'){
+  const cards=S.packPicking.options.map((o,i)=>{
+   const d=MASTERY_CARDS[o.key];const lvl=d.kind==='suit'?(S.suitMastery[d.target]||0):(S.rankMastery[d.target]||0);
+   const nx=lvl+1,{chip,mult}=masteryBonus55(nx);
+   return`<div class="pack-card" onclick="pickFromPack(${i})"><div class="pi">${d.icon}</div><div class="pnm">${d.name}</div><div class="pdesc">Cấp hiện tại: ${lvl} → ${nx}. Mỗi lá được tính: +${chip} Chip${mult?' +'+mult+' Mult':''}.</div></div>`;
+  }).join('');
+  return`<div class="overlay"><div class="modal"><h2>🧭 Gói Tinh Thông — Chọn 1</h2><p>Nâng cấp VĨNH VIỄN, không giới hạn cấp.</p><div class="pack-grid">${cards}</div><div class="controls" style="margin-top:14px;"><button class="btn ghost" onclick="closePack()">Bỏ qua (đóng)</button></div></div></div>`;
+ }
+ if(S.packPicking.kind==='divination'){
+  const cards=S.packPicking.options.map((o,i)=>{const d=DIVINATION[o.key];return`<div class="pack-card" onclick="pickFromPack(${i})"><div class="pi">${d.icon}</div><div class="pnm">${d.name}</div><div class="pdesc">${d.desc}</div></div>`;}).join('');
+  return`<div class="overlay"><div class="modal"><h2>☯️ Kinh Dịch — Chọn 1 Quẻ</h2><p>Rủi ro áp dụng khi bạn vào Blind KẾ TIẾP. Thưởng chỉ nhận nếu THẮNG Blind đó.</p><div class="pack-grid">${cards}</div><div class="controls" style="margin-top:14px;"><button class="btn ghost" onclick="closePack()">Bỏ qua (đóng)</button></div></div></div>`;
+ }
+ return _rpp55();
+};
+const _pf55=pickFromPack;
+pickFromPack=function(i){
+ if(S.packPicking&&S.packPicking.kind==='mastery'){
+  const o=S.packPicking.options[i],d=MASTERY_CARDS[o.key];
+  if(d.kind==='suit')S.suitMastery[d.target]=(S.suitMastery[d.target]||0)+1;
+  else S.rankMastery[d.target]=(S.rankMastery[d.target]||0)+1;
+  const lv=d.kind==='suit'?S.suitMastery[d.target]:S.rankMastery[d.target];
+  S.message='🧭 '+d.name+' → Cấp '+lv+'!';
+  S.packPicking=null;render();return;
+ }
+ if(S.packPicking&&S.packPicking.kind==='divination'){
+  const o=S.packPicking.options[i],d=DIVINATION[o.key];
+  S.pendingDivinationQueued=S.pendingDivinationQueued||[];
+  S.pendingDivinationQueued.push(o.key);
+  S.message=d.icon+' '+d.name+' đã chọn — rủi ro sẽ áp dụng khi bạn bước vào Blind kế tiếp!';
+  S.packPicking=null;render();return;
+ }
+ _pf55(i);
+};
+
+/* ================= G. ÁP DỤNG RỦI RO LÚC VÀO BLIND + TRẢ THƯỞNG LÚC THẮNG ================= */
+const _sb55=setupBlind;
+setupBlind=function(){
+ _sb55();
+ if(!S)return;
+ S.pendingDivinationActive=S.pendingDivinationActive||[];
+ if(S.pendingDivinationQueued&&S.pendingDivinationQueued.length){
+  S.pendingDivinationQueued.forEach(k=>{const d=DIVINATION[k];if(d&&d.risk){try{d.risk(S);}catch(e){console.error(e);}}});
+  S.pendingDivinationActive=S.pendingDivinationActive.concat(S.pendingDivinationQueued);
+  S.pendingDivinationQueued=[];
+ }
+};
+const _wb55=winBlind;
+winBlind=function(){
+ if(S&&S.pendingDivinationActive&&S.pendingDivinationActive.length){
+  const msgs=[];
+  S.pendingDivinationActive.forEach(k=>{const d=DIVINATION[k];if(d&&d.reward){try{const m=d.reward(S);if(m)msgs.push(d.icon+' '+m);}catch(e){console.error(e);}}});
+  S.pendingDivinationActive=[];
+  if(msgs.length)say55('☯️ '+msgs.join(' · '),'#ffd76a');
+ }
+ _wb55();
+};
+
+/* ================= H. SHOP: THÊM 2 GÓI MỚI + ÁP DỤNG VOUCHER GIẢM GIÁ ================= */
+function maybeAddPack55(key,base,boostField){
+ if(!S.shopOffers.packs.some(p=>p&&p.key===key)){
+  const boost=S[boostField]||0;
+  if(Math.random()<base+0.1*boost)S.shopOffers.packs.push({key});
+ }
+}
+const _bs55=buildShop;
+buildShop=function(){
+ _bs55();
+ if(!S||!S.shopOffers)return;
+ maybeAddPack55('masteryPack',MASTERY_PACK_BASE,'masteryBoost');
+ maybeAddPack55('divinationPack',DIVINATION_PACK_BASE,'divinationBoost');
+};
+const _bp55=buyPack;
+buyPack=function(idx){
+ const offer=S.shopOffers&&S.shopOffers.packs[idx];
+ if(offer&&((offer.key==='masteryPack'&&S.masteryDiscount)||(offer.key==='divinationPack'&&S.divinationDiscount))){
+  const def=PACKS[offer.key],saved=def.cost;
+  def.cost=Math.max(1,Math.round(saved*0.7));
+  _bp55(idx);
+  def.cost=saved;return;
+ }
+ _bp55(idx);
+};
+
+/* ================= I. Ô NHỎ TRÊN HUD HIỆN CẤP TINH THÔNG + QUẺ ĐANG CHỜ ================= */
+function masteryBoxHTML55(){
+ if(!S)return'';
+ const sm=S.suitMastery||{S:0,H:0,D:0,C:0};
+ const suits=Object.keys(SUITS).map(s=>`<span class="mst-chip55" title="${SUITS[s].name} Lv.${sm[s]||0}">${SUITS[s].sym}<b>${sm[s]||0}</b></span>`).join('');
+ const ranks=Object.entries(S.rankMastery||{}).filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,3)
+  .map(([k,v])=>`<span class="mst-chip55" title="Bậc ${rankLabel(+k)} Lv.${v}">${rankLabel(+k)}<b>${v}</b></span>`).join('');
+ const active=(S.pendingDivinationActive&&S.pendingDivinationActive.length)
+  ?S.pendingDivinationActive.map(k=>DIVINATION[k]?DIVINATION[k].icon:'☯️').join(' '):'';
+ return`<div class="mastery-box55"><span class="mst-lbl55">⚜️</span>${suits}${ranks?('<span class="mst-sep55">|</span><span class="mst-lbl55">🔢</span>'+ranks):''}${active?('<span class="mst-sep55">|</span><span class="mst-lbl55">☯️ Đang chờ:</span><span class="mst-active55">'+active+'</span>'):''}</div>`;
+}
+const _r55=render;
+render=function(){
+ _r55();
+ try{
+  if(S&&['playing','shop','blind-intro','scoring'].includes(S.phase)){
+   const hud=document.querySelector('.hud');
+   const old=document.querySelector('.mastery-box55');
+   if(old)old.outerHTML=masteryBoxHTML55();
+   else if(hud)hud.insertAdjacentHTML('afterend',masteryBoxHTML55());
+  }else{
+   const old=document.querySelector('.mastery-box55');if(old)old.remove();
+  }
+ }catch(e){console.error(e);}
+};
+
+/* ================= J. THƯ VIỆN: TAB "⚜️ Chất & Kinh Dịch" ================= */
+const _rl55=renderLibraryModal;
+renderLibraryModal=function(){
+ _rl55();
+ const m=document.getElementById('libraryModal');if(!m)return;
+ const tabs=m.querySelector('.lib-tabs');if(!tabs)return;
+ if(!tabs.querySelector('[data-mk-tab]'))tabs.insertAdjacentHTML('beforeend',`<button class="lib-tab-btn ${libraryTab==='mastery'?'active':''}" data-mk-tab onclick="switchLibraryTab('mastery')">⚜️ Chất & Kinh Dịch</button>`);
+ if(libraryTab!=='mastery')return;
+ const sm=S.suitMastery||{S:0,H:0,D:0,C:0};
+ const suitHtml=Object.keys(SUITS).map(s=>{const lvl=sm[s]||0,{chip,mult}=masteryBonus55(lvl);return`<div class="lib-item ${lvl>0?'owned':''}"><div class="lib-icon">${SUITS[s].sym}</div><div class="lib-name">${SUITS[s].name}</div><div class="lib-desc">Cấp ${lvl} · +${chip} Chip${mult?' · +'+mult+' Mult':''} mỗi lá</div></div>`;}).join('');
+ const re=Object.entries(S.rankMastery||{}).filter(([k,v])=>v>0).sort((a,b)=>+b[0]-+a[0]);
+ const rankHtml=re.length?re.map(([k,v])=>{const{chip,mult}=masteryBonus55(v);return`<div class="lib-item owned"><div class="lib-icon">🔢</div><div class="lib-name">Bậc ${rankLabel(+k)}</div><div class="lib-desc">Cấp ${v} · +${chip} Chip${mult?' · +'+mult+' Mult':''} mỗi lá</div></div>`;}).join(''):'<div class="lib-rarity-h">Chưa nâng cấp Bậc nào.</div>';
+ const divHtml=Object.entries(DIVINATION).map(([k,d])=>`<div class="lib-item"><div class="lib-icon">${d.icon}</div><div class="lib-name">${d.name}</div><div class="lib-desc">${d.desc}</div></div>`).join('');
+ const html=`<p class="deck-note">⚜️ <b>Tinh Thông Chất:</b> mỗi lá cùng Chất được tính điểm: +${CHIP_PER_LEVEL} Chip × Cấp; từ Cấp ${MULT_THRESHOLD+1} cộng thêm +${MULT_PER_LEVEL} Mult mỗi cấp vượt ${MULT_THRESHOLD}.<br>🔢 <b>Tinh Thông Bậc:</b> tương tự theo đúng bậc lá bài. Nâng qua Gói Tinh Thông (Shop), không giới hạn cấp.<br>☯️ <b>Kinh Dịch:</b> chọn 1 quẻ trong Gói Kinh Dịch — rủi ro áp dụng ngay khi vào Blind kế tiếp, thưởng chỉ nhận khi thắng Blind đó.</p>
+ <div class="lib-rarity-h" style="color:var(--gold)">— CHẤT (♠♥♦♣) —</div><div class="lib-grid">${suitHtml}</div>
+ <div class="lib-rarity-h" style="color:#9be7ff">— BẬC —</div><div class="lib-grid">${rankHtml}</div>
+ <div class="lib-rarity-h" style="color:#c9a0ff">— 8 QUẺ KINH DỊCH —</div><div class="lib-grid">${divHtml}</div>`;
+ tabs.insertAdjacentHTML('afterend',html);
+};
+
+/* ================= K. GHI CHÚ NGẮN TRONG MÀN LUẬT CHƠI ================= */
+const _rr55=renderRulesModal;
+renderRulesModal=function(flag){
+ _rr55(flag);
+ try{
+  const m=document.getElementById('rulesModal');
+  if(m&&!m.querySelector('.mk-note55')){
+   const h2=m.querySelector('h2');
+   if(h2)h2.insertAdjacentHTML('afterend',`<p class="mk-note55"><b>⚜️ Tinh Thông Chất/Bậc:</b> Gói Tinh Thông (Shop) nâng cấp vĩnh viễn 1 Chất hoặc 1 Bậc — mỗi lá cùng loại khi tính điểm: +${CHIP_PER_LEVEL} Chip × Cấp, từ Cấp ${MULT_THRESHOLD+1} cộng thêm Mult. <b>☯️ Kinh Dịch:</b> Gói Kinh Dịch cho chọn 1 trong 8 quẻ — rủi ro áp dụng ngay ở Blind kế tiếp, thưởng chỉ nhận khi thắng Blind đó.</p>`);
+  }
+ }catch(e){}
+};
+
+/* ================= L. CSS ================= */
+const css55=document.createElement('style');
+css55.textContent=`
+.mastery-box55{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:rgba(0,0,0,.2);border:1px solid var(--panel-edge);border-radius:10px;padding:5px 10px;margin-bottom:8px;font-size:.72rem;color:var(--text-lo);}
+.mastery-box55 .mst-lbl55{font-weight:700;color:var(--gold);margin-right:2px;}
+.mastery-box55 .mst-chip55{display:inline-flex;align-items:center;gap:2px;background:rgba(240,184,75,.12);border-radius:8px;padding:1px 6px;color:var(--text-hi);font-family:var(--font-mono);}
+.mastery-box55 .mst-chip55 b{color:var(--gold);}
+.mastery-box55 .mst-sep55{opacity:.4;}
+.mastery-box55 .mst-active55{color:#ffd76a;font-weight:700;}
+`;
+document.head.appendChild(css55);
+
+if(S)render();
+})();
+/* ===== ARCANUM v56: KINH DỊCH NHIỀU BLIND + SHOP MUA TRỰC TIẾP + BẢNG HIỂN THỊ ===== */
+(function(){
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const say=(t,c)=>{const e=document.createElement('div');e.className='callout';e.style.fontSize='1.2rem';e.style.color=c||'#ffd76a';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2200);};
+const MAX_ACTIVE=3;                 // tối đa số quẻ cùng lúc (đang chạy + chờ)
+const DIV_BASE_PRICE=8;             // giá quẻ cơ bản (+1 mỗi Ante)
+const CHIP_PER_LEVEL=5,MULT_THRESHOLD=5,MULT_PER_LEVEL=2; // phải giống v55
+const mb=l=>({chip:CHIP_PER_LEVEL*l,mult:l>MULT_THRESHOLD?MULT_PER_LEVEL*(l-MULT_THRESHOLD):0});
+const lvls=()=>Object.keys(S.handLevels).filter(k=>k!=='ALL');
+const allUp=(st,n)=>{lvls().forEach(k=>st.handLevels[k]+=n);};
+const fillConsum=(st,pool)=>{let n=0;while(st.consumables.length<st.maxConsumableSlots){const k=randKey(pool);st.consumables.push({uid:uid(),type:pool===PLANETS?'planet':'tarot',key:k});n++;}return n;};
+const scoreUp=(st,p)=>{st.blindScore=Math.round(st.blindScore*(1+p));};
+
+/* ---------- 10 QUẺ ---------- */
+const Q={
+ can:{name:'Quẻ Càn (Trời)',icon:'☰',len:3,
+  curse:'Mục tiêu mỗi Blind +20%.',reward:'Tất cả loại bài +1 cấp, +$20.',
+  apply:st=>scoreUp(st,0.2),win:st=>{allUp(st,1);st.money+=20;return'Tất cả bài +1 cấp, +$20';}},
+ khon:{name:'Quẻ Khôn (Đất)',icon:'☷',len:2,
+  curse:'-1 lượt Bỏ bài mỗi Blind.',reward:'+1 Discard vĩnh viễn, +$15.',
+  apply:st=>{st.discardsLeft=Math.max(0,st.discardsLeft-1);},
+  win:st=>{st.baseDiscards+=1;st.discardsLeft+=1;st.money+=15;return'+1 Discard vĩnh viễn, +$15';}},
+ chan:{name:'Quẻ Chấn (Sấm)',icon:'☳',len:2,
+  curse:'-1 lượt Chơi bài mỗi Blind.',reward:'Loại bài bạn chơi nhiều nhất +3 cấp.',
+  apply:st=>{st.handsLeft=Math.max(1,st.handsLeft-1);},
+  win:st=>{let k=null,m=-1;Object.entries(st.handPlayCounts).forEach(([a,v])=>{if(a!=='ALL'&&v>m){m=v;k=a;}});if(!k||m<=0)k=pick(lvls());st.handLevels[k]+=3;return HAND_TYPES[k].name+' +3 cấp';}},
+ ton:{name:'Quẻ Tốn (Gió)',icon:'☴',len:3,
+  curse:'Cỡ bài trên tay -1 mỗi Blind.',reward:'+1 cỡ bài vĩnh viễn, +$10.',
+  apply:st=>{st.handSize=Math.max(4,st.handSize-1);},
+  win:st=>{st.baseHandSize+=1;st.handSize+=1;st.money+=10;return'+1 cỡ bài vĩnh viễn, +$10';}},
+ kham:{name:'Quẻ Khảm (Nước)',icon:'☵',len:2,
+  curse:'Mất $5 khi vào mỗi Blind.',reward:'+$35.',
+  once:st=>{st.money=Math.max(0,st.money-5);},
+  win:st=>{st.money+=35;return'+$35';}},
+ ly:{name:'Quẻ Ly (Lửa)',icon:'☲',len:3,
+  curse:'Mục tiêu mỗi Blind +30%.',reward:'1 Joker Rất hiếm miễn phí (hết chỗ: +$20).',
+  apply:st=>scoreUp(st,0.3),
+  win:st=>{if(activeJokerCount(st)<st.maxJokerSlots){const k=pick(Object.keys(JOKERS).filter(x=>JOKERS[x].rarity==='R'));st.jokers.push({uid:uid(),key:k,edition:'none'});return'Joker '+JOKERS[k].name;}st.money+=20;return'+$20 (hết chỗ)';}},
+ can2:{name:'Quẻ Cấn (Núi)',icon:'☶',len:4,
+  curse:'Tiền thưởng khi thắng Blind bị cắt một nửa.',reward:'Lấp đầy khay bằng Planet, +$12.',
+  win:st=>{const n=fillConsum(st,PLANETS);st.money+=12;return'+'+n+' Planet, +$12';}},
+ doai:{name:'Quẻ Đoài (Hồ)',icon:'☱',len:2,
+  curse:'Mục tiêu +10% và -1 lượt Bỏ bài mỗi Blind.',reward:'Lấp đầy khay bằng Tarot, +$10.',
+  apply:st=>{scoreUp(st,0.1);st.discardsLeft=Math.max(0,st.discardsLeft-1);},
+  win:st=>{const n=fillConsum(st,TAROTS);st.money+=10;return'+'+n+' Tarot, +$10';}},
+ thai:{name:'Quẻ Thái (Thiên Địa Giao)',icon:'☯️',len:3,
+  curse:'Mục tiêu +15% và mất $3 mỗi Blind.',reward:'Tất cả loại bài +2 cấp.',
+  apply:st=>scoreUp(st,0.15),once:st=>{st.money=Math.max(0,st.money-3);},
+  win:st=>{allUp(st,2);return'Tất cả bài +2 cấp';}},
+ phuc:{name:'Quẻ Phục (Lôi Địa)',icon:'⚡',len:6,
+  curse:'Mục tiêu +12% × (thứ tự Blind trong quẻ): 12%, 24%, 36%...',reward:'Tất cả bài +3 cấp, +$80, +1 khay Joker.',
+  apply:(st,step)=>scoreUp(st,0.12*(step+1)),
+  win:st=>{allUp(st,3);st.money+=80;st.maxJokerSlots+=1;return'Tất cả +3 cấp, +$80, +1 khay Joker';}},
+};
+window.__Q56=Q;
+
+/* ---------- Trạng thái ---------- */
+const init=()=>{S.divActive=S.divActive||[];S.divQueued=S.divQueued||[];};
+const taken=k=>S.divActive.some(d=>d.key===k)||S.divQueued.includes(k);
+const keyHas=k=>S&&S.divActive&&S.divActive.some(d=>d.key===k);
+
+/* ---------- Vào Blind: kích hoạt quẻ chờ + áp hiệu ứng bất lợi ---------- */
+const _sb=setupBlind;
+setupBlind=function(){
+ _sb();
+ if(!S)return;init();
+ S.divQueued.splice(0).forEach(k=>{if(Q[k]&&!taken(k))S.divActive.push({key:k,left:Q[k].len,total:Q[k].len});});
+ const tag=S.ante+'-'+S.blindIdx;
+ const first=S._divTag!==tag;S._divTag=tag;
+ S.divActive.forEach(d=>{
+  const q=Q[d.key];if(!q)return;
+  if(q.apply)q.apply(S,d.total-d.left);
+  if(q.once&&first)q.once(S);
+ });
+};
+
+/* ---------- Thắng Blind: giảm bộ đếm, trả thưởng khi hết hạn ---------- */
+const _wb=winBlind;
+winBlind=function(){
+ init();
+ const m0=S.money,halve=keyHas('can2'),act=S.divActive.slice();
+ _wb();
+ if(!S)return;
+ if(halve){const g=S.money-m0;if(g>0)S.money-=Math.floor(g/2);}
+ const msgs=[];
+ act.forEach(d=>{
+  const q=Q[d.key];if(!q)return;
+  d.left-=1;
+  if(d.left<=0){try{const m=q.win(S);if(m)msgs.push(q.icon+' '+m);}catch(e){console.error(e);}
+   S.divActive=S.divActive.filter(x=>x!==d);}
+ });
+ if(msgs.length)say('☯️ Quẻ ứng nghiệm! '+msgs.join(' · '),'#ffd76a');
+ render();
+};
+
+/* ---------- Giá ---------- */
+const divPrice=k=>S.shopAllFree?0:Math.max(1,Math.round((DIV_BASE_PRICE+(S.ante-1))*(S.priceMult||1)*(S.divinationDiscount?0.7:1)));
+const mastLvl=o=>o.kind==='suit'?(S.suitMastery[o.t]||0):(S.rankMastery[o.t]||0);
+const mastPrice=o=>S.shopAllFree?0:Math.max(1,Math.round((5+Math.floor(mastLvl(o)/2))*(S.priceMult||1)*(S.masteryDiscount?0.7:1)));
+const mastName=o=>o.kind==='suit'?('Tinh Thông '+SUITS[o.t].name):('Tinh Thông Bậc '+rankLabel(o.t));
+const mastIcon=o=>o.kind==='suit'?SUITS[o.t].sym:'🔢';
+
+/* ---------- Shop: tạo đồ bán, bỏ 2 gói cũ ---------- */
+const _bs=buildShop;
+buildShop=function(){
+ _bs();
+ if(!S||!S.shopOffers)return;init();
+ S.suitMastery=S.suitMastery||{S:0,H:0,D:0,C:0};S.rankMastery=S.rankMastery||{};
+ S.shopOffers.packs=(S.shopOffers.packs||[]).filter(p=>!p||(p.key!=='masteryPack'&&p.key!=='divinationPack'));
+ const dn=2+(S.divinationBoost?1:0),mn=1+(S.masteryBoost?1:0);
+ const avail=Object.keys(Q).filter(k=>!taken(k)).sort(()=>Math.random()-.5);
+ S.shopOffers.div=avail.slice(0,dn).map(k=>({key:k}));
+ const suits=Object.keys(SUITS).sort(()=>Math.random()-.5),ranks=[...RANK_ORDER].sort(()=>Math.random()-.5);
+ S.shopOffers.mast=[];
+ for(let i=0;i<mn;i++){S.shopOffers.mast.push({kind:'suit',t:suits[i]});S.shopOffers.mast.push({kind:'rank',t:ranks[i]});}
+};
+window.buyDiv56=function(i){
+ const o=S.shopOffers.div[i];if(!o)return;init();
+ const c=divPrice(o.key);
+ if(S.money<c||S.divActive.length+S.divQueued.length>=MAX_ACTIVE||taken(o.key))return;
+ S.money-=c;S.divQueued.push(o.key);S.shopOffers.div[i]=null;
+ say(Q[o.key].icon+' '+Q[o.key].name+' — có hiệu lực từ Blind kế tiếp!','#c9a0ff');render();
+};
+window.buyMast56=function(i){
+ const o=S.shopOffers.mast[i];if(!o)return;
+ const c=mastPrice(o);if(S.money<c)return;
+ S.money-=c;
+ if(o.kind==='suit')S.suitMastery[o.t]=(S.suitMastery[o.t]||0)+1;else S.rankMastery[o.t]=(S.rankMastery[o.t]||0)+1;
+ S.shopOffers.mast[i]=null;say('🧭 '+mastName(o)+' → Cấp '+mastLvl(o)+'!','#9be7ff');render();
+};
+
+/* ---------- Mô tả voucher cũ theo cơ chế mới ---------- */
+VOUCHERS.masteryScholar.desc='Giảm 30% giá lá Tinh Thông trong Shop, và Shop bán thêm 1 cặp Chất+Bậc.';
+VOUCHERS.divinationMaster.desc='Giảm 30% giá Quẻ Kinh Dịch trong Shop, và Shop bán thêm 1 quẻ.';
+
+/* ---------- Bảng hiển thị ---------- */
+function panel(){
+ init();
+ if(!S.divActive.length&&!S.divQueued.length)return'';
+ const a=S.divActive.map(d=>{const q=Q[d.key];if(!q)return'';const done=d.total-d.left;
+  return`<div class="div-card56"><div class="div-h56"><span class="div-i56">${q.icon}</span><b>${q.name}</b><span class="div-n56">${'●'.repeat(done)}${'○'.repeat(d.left)} Còn ${d.left}/${d.total} Blind</span></div><div class="div-c56">⚠️ ${q.curse}</div><div class="div-r56">🎁 ${q.reward}</div></div>`;}).join('');
+ const w=S.divQueued.map(k=>{const q=Q[k];return`<div class="div-card56 wait"><div class="div-h56"><span class="div-i56">${q.icon}</span><b>${q.name}</b><span class="div-n56">⏳ Chờ Blind kế tiếp</span></div><div class="div-c56">⚠️ ${q.curse}</div><div class="div-r56">🎁 ${q.reward}</div></div>`;}).join('');
+ return`<div class="div-panel56"><div class="div-t56">☯️ Kinh Dịch đang hiệu lực</div><div class="div-row56">${a}${w}</div></div>`;
+}
+function shopHTML(){
+ const o=S.shopOffers;if(!o)return{d:'',m:''};
+ const full=S.divActive.length+S.divQueued.length>=MAX_ACTIVE;
+ const d=(o.div||[]).map((x,i)=>{if(!x)return'';const q=Q[x.key],c=divPrice(x.key);
+  return`<div class="shop-item" style="border-color:#9a5fc9"><div class="icon">${q.icon}</div><div class="nm">${q.name}</div><div class="dsc"><b>${q.len} Blind</b><br>⚠️ ${q.curse}<br>🎁 ${q.reward}</div><div class="price">${S.shopAllFree?'MIỄN PHÍ':'$'+c}</div><button class="btn small purple" onclick="buyDiv56(${i})" ${(S.money<c||full||taken(x.key))?'disabled':''}>${full?'Đủ '+MAX_ACTIVE+' quẻ':'Chọn quẻ'}</button></div>`;}).join('');
+ const m=(o.mast||[]).map((x,i)=>{if(!x)return'';const l=mastLvl(x),nx=mb(l+1),c=mastPrice(x);
+  return`<div class="shop-item" style="border-color:#3fb8a6"><div class="icon">${mastIcon(x)}</div><div class="nm">${mastName(x)}</div><div class="dsc">Cấp ${l} → ${l+1}<br>Mỗi lá được tính: +${nx.chip} Chip${nx.mult?' +'+nx.mult+' Mult':''}</div><div class="price">${S.shopAllFree?'MIỄN PHÍ':'$'+c}</div><button class="btn small" onclick="buyMast56(${i})" ${S.money<c?'disabled':''}>Mua</button></div>`;}).join('');
+ return{d,m};
+}
+const _r=render;
+render=function(){
+ _r();
+ try{
+  if(!S)return;init();
+  document.querySelectorAll('.div-panel56,.div-shop56').forEach(e=>e.remove());
+  const p=panel();
+  if(S.phase==='playing'||S.phase==='scoring'){
+   const anchor=document.querySelector('.mastery-box55')||document.querySelector('.hud');
+   if(anchor&&p)anchor.insertAdjacentHTML('afterend',p);
+  }else if(S.phase==='shop'){
+   const w=document.querySelector('.shop-wrap>.panel');
+   if(w&&p)w.insertAdjacentHTML('afterend',p);
+   const h=shopHTML();
+   const sp=document.querySelector('.shop-sec[data-t="p"]'),sc=document.querySelector('.shop-sec[data-t="c"]');
+   if(sp&&h.d)sp.insertAdjacentHTML('beforeend',`<div class="div-shop56"><div class="row-label"><span>☯️ KINH DỊCH (bên cạnh Spectral) — chọn quẻ, tối đa ${MAX_ACTIVE} quẻ cùng lúc</span></div><div class="shop-grid">${h.d}</div></div>`);
+   if(sc&&h.m)sc.insertAdjacentHTML('beforeend',`<div class="div-shop56"><div class="row-label"><span>🧭 TINH THÔNG CHẤT / BẬC (nâng cấp vĩnh viễn)</span></div><div class="shop-grid">${h.m}</div></div>`);
+  }else if(S.phase==='blind-intro'&&p){
+   const c=document.querySelector('.modal .controls');if(c)c.insertAdjacentHTML('beforebegin',p);
+  }
+ }catch(e){console.error(e);}
+};
+
+const css=document.createElement('style');
+css.textContent=`
+.div-panel56{margin:0 0 8px;padding:6px 8px;border:1px solid #9a5fc9;border-radius:10px;background:linear-gradient(180deg,rgba(154,95,201,.18),rgba(0,0,0,.2));}
+.div-t56{font-family:var(--font-display);font-weight:800;font-size:.78rem;color:#d9b8ff;margin-bottom:4px;}
+.div-row56{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;}
+.div-card56{flex:1 0 210px;max-width:300px;background:rgba(0,0,0,.28);border:1px solid #9a5fc9;border-radius:8px;padding:6px 8px;font-size:.68rem;line-height:1.3;}
+.div-card56.wait{border-style:dashed;opacity:.85;}
+.div-h56{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.div-i56{font-size:1.2rem;}
+.div-n56{margin-left:auto;font-family:var(--font-mono);color:#ffd76a;font-size:.62rem;}
+.div-c56{color:#ffb3ab;margin-top:2px;}.div-r56{color:#7fd18b;}
+.modal .div-panel56{margin-top:10px;}
+`;
+document.head.appendChild(css);
+if(S)render();
+})();
+/* ===== ARCANUM v57: KINH DỊCH XUẤT HIỆN THEO TỈ LỆ (HIẾM) + TINH THÔNG CHỈ 1 LÁ BAN ĐẦU ===== */
+(function(){
+/* ---- CHỈNH SỐ Ở ĐÂY ---- */
+const DIV_CHANCE=0.22;          // tỉ lệ mỗi Shop có bán Quẻ Kinh Dịch (22%)
+const DIV_CHANCE_PER_BOOST=0.10; // mỗi Voucher "Thầy Bói Kinh Dịch" cộng thêm 10%
+const DIV_COUNT=1;              // số quẻ hiện ra khi xuất hiện (có Voucher: +1)
+const MAST_COUNT=1;             // số lá Tinh Thông hiện ban đầu (có Voucher: +1)
+
+const _bs57=buildShop;
+buildShop=function(){
+  _bs57();
+  if(!S||!S.shopOffers)return;
+  const o=S.shopOffers;
+
+  /* --- Kinh Dịch: lúc có lúc không --- */
+  const dBoost=S.divinationBoost||0;
+  if(Math.random()>=DIV_CHANCE+DIV_CHANCE_PER_BOOST*dBoost){
+    o.div=[];                                   // lần này Shop không bán quẻ nào
+  }else{
+    o.div=(o.div||[]).slice(0,DIV_COUNT+(dBoost?1:0));
+  }
+
+  /* --- Tinh Thông Chất/Bậc: chỉ hiện 1 lá ngẫu nhiên (Chất hoặc Bậc) --- */
+  const mBoost=S.masteryBoost||0;
+  if(Array.isArray(o.mast)&&o.mast.length){
+    o.mast=[...o.mast].sort(()=>Math.random()-.5).slice(0,MAST_COUNT+(mBoost?1:0));
+  }
+};
+
+/* --- Cập nhật mô tả 2 Voucher cho đúng cơ chế mới --- */
+VOUCHERS.masteryScholar.desc='Giảm 30% giá lá Tinh Thông, và Shop bán thêm 1 lá Tinh Thông (2 thay vì 1).';
+VOUCHERS.divinationMaster.desc='Giảm 30% giá Quẻ Kinh Dịch, tăng +10% tỉ lệ Shop có bán quẻ, và khi có quẻ thì bán thêm 1 quẻ.';
+
+if(S&&S.phase==='shop'){try{buildShop();render();}catch(e){}}
+})();
+/* ===== ARCANUM v58: SỬA SHOP — LUÔN CÓ SPECTRAL PACK + VOUCHER, KINH DỊCH/TINH THÔNG SANG TAB RIÊNG ===== */
+(function(){
+/* ---- CHỈNH Ở ĐÂY ---- */
+const ALWAYS_SPECTRAL=true;   // luôn có Spectral Pack trong Shop
+const ALWAYS_VOUCHER=true;    // luôn có 1 Voucher (nếu còn Voucher chưa mua)
+
+const vAvail=k=>!S.ownedVouchers[k]&&(!VOUCHERS[k].req||S.ownedVouchers[VOUCHERS[k].req]);
+
+const _bs58=buildShop;
+buildShop=function(){
+  _bs58();
+  if(!S||!S.shopOffers)return;
+  const o=S.shopOffers;
+
+  /* Spectral Pack luôn có mặt (giữ nguyên gói ngẫu nhiên còn lại) */
+  o.packs=(o.packs||[]).filter(p=>p&&PACKS[p.key]);
+  if(ALWAYS_SPECTRAL&&!o.packs.some(p=>p.key==='spectral'))o.packs.push({key:'spectral'});
+
+  /* Voucher luôn có mặt */
+  if(ALWAYS_VOUCHER&&!o.voucher){
+    const pool=Object.keys(VOUCHERS).filter(vAvail);
+    if(pool.length){
+      const key=pool[Math.floor(Math.random()*pool.length)];
+      o.voucher={key,cost:Math.round((VOUCHERS[key].cost+(S.ante-1)*2)*(S.priceMult||1))};
+      o.voucherBought=false;
+    }
+  }
+};
+
+/* Kinh Dịch + Tinh Thông chuyển sang tab riêng "☯️ Kinh Dịch & Tinh Thông" */
+const _r58=render;
+render=function(){
+  _r58();
+  try{
+    if(!S||S.phase!=='shop')return;
+    const bar=document.querySelector('.shop-tabs');
+    const holder=bar&&bar.nextElementSibling;
+    if(!bar||!holder)return;
+    const blocks=[...document.querySelectorAll('.div-shop56')];
+    if(!blocks.length)return;
+    let sec=holder.querySelector('.shop-sec[data-t="k"]');
+    if(!sec){
+      sec=document.createElement('div');sec.className='shop-sec';sec.dataset.t='k';
+      holder.appendChild(sec);
+    }
+    blocks.forEach(b=>sec.appendChild(b));
+    if(!bar.querySelector('[data-t="k"]')){
+      const n=sec.querySelectorAll('.shop-item').length;
+      const btn=document.createElement('button');
+      btn.className='shop-tab';btn.dataset.t='k';
+      btn.innerHTML='☯️ Kinh Dịch & Tinh Thông'+(n?' <b>'+n+'</b>':'');
+      btn.onclick=()=>shopTab('k');
+      bar.appendChild(btn);
+    }
+    shopTab(window._shopTab||'j');
+  }catch(e){console.error(e);}
+};
+
+if(S&&S.phase==='shop'){try{buildShop();render();}catch(e){}}
 })();
   </script>
 
